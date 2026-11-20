@@ -1,8 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ProfileBadge, TierBadge } from '../components/Badges'
 import { TargetNote } from '../components/Rows'
-import { get, hhmm, profileTag, Q, remaining, sumReady, Table, useFlash, useGet, useMe, useNow, useTitle, when, type S } from '../lib'
+import { get, hhmm, profileTag, Q, remaining, sumReady, Table, useFlash, useGet, useProdAccess, useTitle, when, type S } from '../lib'
+import { DeploymentActions } from './Access'
+import { DeployDialog, StackActions } from './Write'
 
 const Workload = ({ s }: { s: S['Service'] }) => {
   const n = useFlash(JSON.stringify([s.ready_replicas, s.desired_replicas, s.image_ref, s.state]))
@@ -24,17 +27,13 @@ export const DeploymentRows = ({ items }: { items: S['Deployment'][] }) => (
   </Table>
 )
 
-// UI-016 (read side): grant state for a prod stack.
-function GrantState({ s }: { s: S['Stack'] }) {
-  const me = useMe().data!
-  const now = useNow()
-  const grants = useGet<{ items: S['AccessGrant'][] }>(['grants', 'all'], '/access-grants')
-  if (s.environment_tier !== 'prod') return null
-  if (me.auth_method === 'break_glass') return <p className="badge none">Grant bypassed (break-glass)</p>
-  const mine = (grants.data?.items ?? []).filter((g) => g.requester === me.id && g.namespace === s.namespace && g.target === s.target)
-  const active = mine.find((g) => g.status === 'active' && remaining(g.expires_at, now))
-  if (active) return <p>Access until {hhmm(active.expires_at)} {'—'} {remaining(active.expires_at, now)}</p>
-  if (mine.some((g) => g.status === 'requested')) return <p>Awaiting approval</p>
+// UI-016: live grant state for a prod stack.
+export function GrantState({ s }: { s: S['Stack'] }) {
+  const a = useProdAccess(s.namespace!, s.target!, s.environment_tier)
+  if (a.state === 'open') return null
+  if (a.state === 'bypass') return <p className="badge none">Grant bypassed (break-glass)</p>
+  if (a.state === 'active') return <p>Access until {hhmm(a.active!.expires_at)} {'—'} {remaining(a.active!.expires_at, a.now)}</p>
+  if (a.state === 'pending') return <p>Awaiting approval</p>
   return <p><Link to={`/access/request?namespace=${s.namespace}&target=${s.target}`}>Request prod access</Link></p>
 }
 
@@ -54,6 +53,7 @@ export function Stack() {
       <TargetNote target={s.target} />
       {s.rollout_frozen && <div className="banner-red" role="alert">Automatic updates stopped after a failed rollback {'—'} an admin must deploy a revision</div>}
       <GrantState s={s} />
+      <StackActions s={s} />
       <h2>Workloads</h2>
       {s.services?.length ? <Table label="Workloads" head={['Workload', 'Ready', 'Image', 'Digest']}>{s.services.map((v) => <Workload key={`${v.kind}/${v.name}`} s={v} />)}</Table> : <p>No workloads observed.</p>}
       {running && <section aria-labelledby="h-roll"><h2 id="h-roll">Rollout in progress</h2>
@@ -74,10 +74,17 @@ export function Stack() {
 export function Revision() {
   const { ns = '', stack = '', n = '' } = useParams()
   const q = useGet<S['Revision']>(['revisions', ns, stack, n], `/namespaces/${ns}/stacks/${stack}/revisions/${n}`, { path: { ns, stack, n: Number(n) } })
+  const st = useGet<S['Stack']>(['stack', ns, stack], `/namespaces/${ns}/stacks/${stack}`, { path: { ns, stack } })
+  const [deploying, setDeploying] = useState(false)
+  const access = useProdAccess(ns, st.data?.target ?? '', st.data?.environment_tier)
   useTitle(`Revision ${n} — ${stack}`)
   return (
     <Q q={q}>{(r) => <>
       <h1>Revision {r.number}</h1>
+      {st.data && <>
+        <p><button disabled={!access.allowed} onClick={() => setDeploying(true)}>Deploy revision {r.number}</button></p>
+        <GrantState s={st.data} />
+        {deploying && <DeployDialog s={st.data} r={r} onClose={() => setDeploying(false)} />}</>}
       <p><ProfileBadge profile={r.safety_profile} large /> origin {r.origin} {'·'} created {when(r.created_at)} by {r.created_by}</p>
       <p><Link to={`/n/${ns}/s/${stack}`}>Back to {stack}</Link></p>
       <h2>Policy result</h2>
@@ -112,6 +119,7 @@ export function Deployment() {
         {d.started_at && <li>Started {when(d.started_at)}</li>}
         {d.finished_at && <li>Finished {when(d.finished_at)} {'—'} {d.status}</li>}
       </ol>
+      <DeploymentActions d={d} />
       {d.error && <p role="alert">Error: {d.error}</p>}
       <h2>Rollout</h2>
       {d.rollout?.workloads?.length ? <Table label="Rollout" head={['Workload', 'Desired', 'Updated', 'Ready', 'Available', 'Reason']}>

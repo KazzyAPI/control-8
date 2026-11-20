@@ -28,3 +28,16 @@ table { border-collapse:collapse; width:100% } th, td { text-align:left; padding
 .cards { display:flex; gap:1rem; flex-wrap:wrap; list-style:none; padding:0 } .cards li { border:1px solid var(--line); padding:.5rem 1rem; border-radius:.25rem }
 .warn { background:var(--amber-bg); padding:.25rem .5rem; border-left:4px solid var(--amber) }
 .filters { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap }
+.toasts { position:fixed; right:1rem; bottom:1rem; display:grid; gap:.5rem; max-width:min(28rem, calc(100vw - 2rem)); z-index:20 }
+.toast { margin:0; padding:.5rem 1rem; border-radius:.25rem; background:var(--fg); color:var(--bg); border-left:6px solid var(--green) }
+.toast.error { border-left-color:var(--red) }
+.dlg { max-width:min(36rem, calc(100vw - 2rem)); background:var(--bg); color:var(--fg); border:1px solid var(--fg); border-radius:.5rem; padding:1rem 1.5rem }
+.dlg::backdrop { background:rgba(0,0,0,.5) }
+.stackform label { display:block; margin:.5rem 0 } .stackform input:not([type=checkbox]), .stackform select, .stackform textarea { display:block; max-width:100%; box-sizing:border-box }
+.stackform textarea { width:100%; font-family:ui-monospace, monospace }
+.dlg label { display:block; margin:.5rem 0 } .dlg input:not([type=checkbox]):not([type=radio]) { display:block; width:100%; box-sizing:border-box }
+.field-err, .red-line { color:var(--red); font-weight:600 }
+input.narrow { width:5rem }
+a.button { display:inline-block; padding:.1rem .6rem; border:1px solid var(--fg); border-radius:.25rem; text-decoration:none }
+button:disabled { opacity:.6; cursor:not-allowed }

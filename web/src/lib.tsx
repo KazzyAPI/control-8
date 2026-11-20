@@ -66,3 +66,15 @@ export function Table({ label, head, children }: { label: string; head: string[]
 
 export const sumReady = (s: S['Stack']) => (s.services ?? []).reduce((a, v) => [a[0] + (v.ready_replicas ?? 0), a[1] + (v.desired_replicas ?? 0)], [0, 0])
 export const profileTag = (p?: string | null) => (p === 'managed_rollout' ? '[ROLLOUT]' : p === 'as_is' ? '[AS-IS]' : p === 'parachute' ? '[PARACHUTE]' : '')
+
+// UI-016/018: live prod-access state for (namespace, target). Re-evaluates every second, so expiry flips it without reload.
+export function useProdAccess(ns: string, target: string, tier?: string) {
+  const me = useMe().data!
+  const now = useNow()
+  const grants = useGet<{ items: S['AccessGrant'][] }>(['grants', 'all'], '/access-grants')
+  const mine = (grants.data?.items ?? []).filter((g) => g.requester === me.id && g.namespace === ns && g.target === target)
+  const active = mine.find((g) => g.status === 'active' && remaining(g.expires_at, now))
+  const state = tier !== 'prod' ? 'open' as const : me.auth_method === 'break_glass' ? 'bypass' as const : active ? 'active' as const
+    : mine.some((g) => g.status === 'requested') ? 'pending' as const : 'none' as const
+  return { state, active, now, allowed: state === 'open' || state === 'bypass' || state === 'active' }
+}

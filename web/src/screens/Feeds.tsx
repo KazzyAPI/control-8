@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Q, remaining, Table, useGet, useMe, useNow, useTitle, when, hhmm, type S } from '../lib'
 import { TierBadge } from '../components/Badges'
+import { RevokeButton } from './Access'
 
 // UI audit: newest on top; pausing freezes the view at the top id seen, later events are only counted.
 export function Audit() {
@@ -62,11 +63,11 @@ export function Grants({ active }: { active?: boolean }) {
       <h1>{active ? 'Active grants' : 'My grants'}</h1>
       <Q q={q}>{(d) => {
         const rows = d.items.filter((g) => active ? g.status === 'active' && remaining(g.expires_at, now) : g.requester === me.id)
-        return rows.length ? <Table label="Grants" head={['Namespace', 'Target', 'Requester', 'Status', 'Access', 'Reason']}>
+        return rows.length ? <Table label="Grants" head={['Namespace', 'Target', 'Requester', 'Status', 'Access', 'Reason', 'Actions']}>
           {rows.map((g) => { const left = g.status === 'active' ? remaining(g.expires_at, now) : null
             return <tr key={g.id}><th scope="row">{g.namespace}</th><td>{g.target}</td><td>{g.requester}</td>
               <td>{g.status === 'active' && !left ? 'expired' : g.status}</td>
-              <td>{left ? `until ${hhmm(g.expires_at)} — ${left}` : '—'}</td><td>{g.reason}</td></tr> })}
+              <td>{left ? `until ${hhmm(g.expires_at)} — ${left}` : '—'}</td><td>{g.reason}</td><td><RevokeButton g={g} /></td></tr> })}
         </Table> : <p>{active ? 'No active grants.' : 'You have no grants.'}</p>
       }}</Q>
     </>

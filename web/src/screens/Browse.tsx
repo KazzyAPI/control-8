@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router'
 import { StackRow, STACK_HEAD } from '../components/Rows'
 import { TierBadge } from '../components/Badges'
+import { CreateAsset, CreateStack, ApproverGroup } from './Write'
 import { Q, Table, useGet, useMe, useNow, remaining, hhmm, useTitle, type S } from '../lib'
 
 const useInventory = () => useGet<{ items: S['Stack'][] }>(['inventory'], '/inventory')
@@ -33,7 +34,7 @@ export function Overview() {
           <li key={t.name}><strong>{t.name}</strong> <TierBadge tier={t.environment_tier} /><br />{t.reachable ? 'Reachable' : 'Unreachable'} {'·'} {t.sync ?? 'unknown'} {'·'} last seen {hhmm(t.last_seen_at)}</li>)}</ul>}</Q>
       </section>
       <section aria-labelledby="h-pending"><h2 id="h-pending">Pending approvals</h2>
-        <p>{pending} access request{pending === 1 ? '' : 's'} waiting</p></section>
+        <p>{pending} access request{pending === 1 ? '' : 's'} waiting {pending > 0 && <Link to="/access/approvals">Open queue</Link>}</p></section>
       <section aria-labelledby="h-mine"><h2 id="h-mine">My active grants</h2><GrantList grants={me.active_grants ?? []} empty="No active prod access." /></section>
       <Q q={inv}>{() => <>{[...groups].map(([ns, stacks]) =>
         <section key={ns} aria-labelledby={`h-${ns}`}><h2 id={`h-${ns}`}><Link to={`/n/${ns}`}>{ns}</Link></h2>
@@ -45,6 +46,7 @@ export function Overview() {
 
 export function Namespace() {
   const { ns = '' } = useParams()
+  const me = useMe().data!
   useTitle(ns)
   const n = useGet<S['Namespace']>(['namespace', ns], `/namespaces/${ns}`, { path: { ns } })
   const assets = useGet<{ items: S['Asset'][] }>(['assets', ns], `/namespaces/${ns}/assets`, { path: { ns } })
@@ -55,11 +57,15 @@ export function Namespace() {
       <h1>{d.display_name || ns}</h1>
       <p>{d.environment_tier && <TierBadge tier={d.environment_tier} />} Approver group: {d.approver_group ?? 'none'}</p>
       {d.description && <p>{d.description}</p>}
+      {me.global_admin && <ApproverGroup ns={ns} current={d.approver_group} />}
       <h2>Assets</h2>
       <Q q={assets}>{(a) => a.items.length ? <ul>{a.items.map((x) => <li key={x.slug}><Link to={`/n/${ns}/assets/${x.slug}`}>{x.name}</Link></li>)}</ul> : <p>No assets.</p>}</Q>
       <h2>Stacks</h2>
       <Q q={inv}>{(i) => { const st = i.items.filter((s) => s.namespace === ns)
         return st.length ? <Table label="Stacks" head={STACK_HEAD}>{st.map((s) => <StackRow key={s.id} s={s} />)}</Table> : <p>No stacks.</p> }}</Q>
+      <h2>Create</h2>
+      <CreateAsset ns={ns} />
+      <CreateStack ns={ns} />
       <h2>Policy summary</h2>
       <Q q={pol}>{(p) => <ul>
         <li>Allowed registries: {(p.allowed_registries ?? []).join(', ') || 'any'}</li>
