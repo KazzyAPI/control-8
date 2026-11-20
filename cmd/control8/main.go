@@ -50,6 +50,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := auth.Bootstrap(db, cfg.BootstrapAdminGrp); err != nil {
+		log.Error("bootstrap admin", "err", err)
+		os.Exit(1)
+	}
+
 	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg), ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

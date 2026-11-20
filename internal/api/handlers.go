@@ -17,6 +17,10 @@ func (s *server) routes(mux *http.ServeMux) (patterns []string) {
 		mux.HandleFunc(pattern, h)
 	}
 	reg("POST /auth/break-glass", s.breakGlass)
+	reg("GET /auth/login", s.oidcLogin)
+	reg("GET /auth/callback", s.oidcCallback)
+	reg("GET /login", htmlPage("Sign in", `<p><a href="/auth/login">Sign in with OIDC</a></p>`))
+	reg("GET /no-access", htmlPage("No access", "<p>No access: ask an admin to map your group.</p>"))
 	reg("POST /auth/logout", s.api(s.logout))
 	reg("GET /api/v1/me", s.api(s.me))
 	reg("GET /api/v1/tokens", s.api(s.tokens))
@@ -53,7 +57,7 @@ func (s *server) me(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	}
 	writeJSON(w, 200, map[string]any{"id": p.ID, "display_name": p.Display, "auth_method": p.AuthMethod,
 		"global_admin": authz.Effective(s.db, p, "") == 4, "csrf_token": csrf,
-		"approver_for": []string{}, "namespaces": ns, "active_grants": []any{}})
+		"approver_for": s.approverFor(p.Groups), "namespaces": ns, "active_grants": []any{}})
 }
 
 // tokens lists configured tokens: own (same owner), or all for global_admin. Never the hash (AUTH-033).

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
+
 	"github.com/KazzyAPI/control-8/internal/audit"
 	"github.com/KazzyAPI/control-8/internal/auth"
 	"github.com/KazzyAPI/control-8/internal/authz"
@@ -19,10 +21,11 @@ import (
 )
 
 type server struct {
-	db  *sql.DB
-	cfg *config.Config
-	now func() time.Time
-	mu  sync.Mutex
+	db       *sql.DB
+	cfg      *config.Config
+	now      func() time.Time
+	mu       sync.Mutex
+	oidcProv *oidc.Provider
 	// shortcut: in-memory per-IP failure log (lost on restart, keyed by RemoteAddr), fine for a single replica
 	fails map[string][]time.Time
 }

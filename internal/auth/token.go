@@ -167,3 +167,20 @@ func NewID(prefix string) string {
 	rand.Read(b)
 	return prefix + "_" + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
 }
+
+// Bootstrap creates a global_admin binding for group if none exists (AUTH-021).
+func Bootstrap(db *sql.DB, group string) error {
+	if group == "" {
+		return nil
+	}
+	var n int
+	db.QueryRow(`SELECT count(*) FROM role_binding WHERE role='global_admin'`).Scan(&n)
+	if n > 0 {
+		return nil
+	}
+	id := NewID("rb")
+	if _, err := db.Exec(`INSERT INTO role_binding(id,idp_group,namespace_id,role) VALUES(?,?,NULL,'global_admin')`, id, group); err != nil {
+		return err
+	}
+	return audit.Write(db, audit.Event{Action: "role_binding.create", TargetType: "role_binding", TargetID: id, Details: map[string]any{"group": group, "bootstrap": true}})
+}
