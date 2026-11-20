@@ -38,6 +38,10 @@ func (f *fakeDriver) Teardown(context.Context, rt.Stack) (string, error) {
 	return "kept PersistentVolumeClaim/data\n", f.teardown
 }
 
+func (f *fakeDriver) Watch(context.Context, rt.WatchOptions) (rt.Cache, error) {
+	return nil, errors.New("no watch")
+}
+
 const (
 	cm  = "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: cfg}\ndata: {a: b}\n"
 	pg  = cm + "---\napiVersion: apps/v1\nkind: Deployment\nmetadata: {name: db}\nspec:\n  selector: {matchLabels: {app: db}}\n  template:\n    metadata: {labels: {app: db}}\n    spec: {containers: [{name: db, image: ghcr.io/acme/postgres:16}]}\n"

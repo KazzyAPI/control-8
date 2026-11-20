@@ -509,6 +509,9 @@ func (s *server) finish(d depRec, x stackRec, number int, profile, out string, r
 	}
 	s.auditSys(d.NS, "deployment.run", d.ID, outcome, details)
 	s.publishDep(d.ID)
+	if s.inv != nil {
+		s.inv.Enqueue(x.ID) // desired revision / progress changed: refresh health and drift (K8S-061)
+	}
 	if nx, err := scanStack(s.db.QueryRow(stackSel+`WHERE st.id=?`, x.ID)); err == nil {
 		if nx.State == "removed" {
 			s.publish(events.Event{Type: "stack.removed", At: s.now(), Namespace: nx.NS, Data: map[string]string{"namespace": nx.NS, "slug": nx.Slug}})

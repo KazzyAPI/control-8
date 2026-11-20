@@ -40,7 +40,6 @@ paths:
   /me:
     get: {tags: [meta], operationId: getMe, responses: {'200': {description: Principal, content: {application/json: {schema: {$ref: '#/components/schemas/Principal'}}}}}}
   /inventory:
-    x-milestone: M9
     get: {tags: [stacks], operationId: getInventory, responses: {'200': {description: All visible stacks, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
 
   /targets:
@@ -133,7 +132,6 @@ paths:
         '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
   /namespaces/{ns}/stacks/{stack}/services:
-    x-milestone: M9
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: listServices, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Service'}}}}}}}}}
 
@@ -357,6 +355,7 @@ components:
         health: {type: string, enum: [healthy, progressing, degraded, drifted, frozen, unknown]}
         rollout_frozen: {type: boolean}
         drift: {type: array, items: {$ref: '#/components/schemas/DriftItem'}}
+        observed_at: {type: [string, 'null'], description: 'Last informer recompute; stale while health is unknown (K8S-065)'}
         digest_status: {type: [object, 'null'], properties: {checked_at: {type: [string, 'null']}, error: {type: [string, 'null']}, updates: {type: array, items: {type: object, properties: {workload: {type: string}, container: {type: string}, current: {type: [string, 'null']}, available: {type: string}}}}}}
         parachute: {oneOf: [{$ref: '#/components/schemas/StackParachute'}, {type: 'null'}], description: docker only}
         services: {type: array, items: {$ref: '#/components/schemas/Service'}}

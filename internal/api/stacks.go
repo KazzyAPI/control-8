@@ -24,6 +24,8 @@ func (s *server) stackRoutes(reg func(string, http.HandlerFunc)) {
 	reg("GET "+st, s.api(s.listStacks))
 	reg("POST "+st, s.api(s.createStack))
 	reg("GET "+st+"/{stack}", s.api(s.getStack))
+	reg("GET "+st+"/{stack}/services", s.api(s.listServices))
+	reg("GET /api/v1/inventory", s.api(s.inventory))
 	reg("DELETE "+st+"/{stack}", s.api(s.deleteStack))
 	reg("GET "+st+"/{stack}/revisions", s.api(s.listRevisions))
 	reg("POST "+st+"/{stack}/revisions", s.api(s.createRevision))
@@ -41,24 +43,28 @@ type stackRec struct {
 	K8sNS, Profile, Digest                                            *string
 	Desired                                                           *int
 	Frozen                                                            bool
-	Drift                                                             string
+	Drift, Health, Services                                           string
+	Observed                                                          *string
 }
 
 const stackSel = `SELECT st.id,n.id,n.slug,a.slug,st.target_id,COALESCE(t.name,''),st.slug,st.runtime,st.state,
 	CASE WHEN n.environment_tier='prod' OR t.environment_tier='prod' THEN 'prod' ELSE 'non-prod' END,
-	st.k8s_namespace,st.safety_profile,st.digest_status,st.desired_revision,st.rollout_frozen,st.drift
+	st.k8s_namespace,st.safety_profile,st.digest_status,st.desired_revision,st.rollout_frozen,st.drift,
+	st.health,st.observed_at,COALESCE((SELECT json_group_array(json(j)) FROM (SELECT json_object('name',name,'kind',kind,'state',state,'health',health,
+	'desired_replicas',desired_replicas,'ready_replicas',ready_replicas,'image_ref',image_ref,'image_id',image_id,
+	'is_database',json(CASE WHEN is_database THEN 'true' ELSE 'false' END),'containers',json(containers)) j FROM service WHERE stack_id=st.id ORDER BY name)),'[]')
 	FROM stack st JOIN namespace n ON n.id=st.namespace_id JOIN asset a ON a.id=st.asset_id LEFT JOIN target t ON t.id=st.target_id `
 
 func scanStack(row interface{ Scan(...any) error }) (x stackRec, err error) {
 	err = row.Scan(&x.ID, &x.NSID, &x.NS, &x.Asset, &x.TargetID, &x.Target, &x.Slug, &x.Runtime, &x.State, &x.Tier,
-		&x.K8sNS, &x.Profile, &x.Digest, &x.Desired, &x.Frozen, &x.Drift)
+		&x.K8sNS, &x.Profile, &x.Digest, &x.Desired, &x.Frozen, &x.Drift, &x.Health, &x.Observed, &x.Services)
 	return
 }
 
-// JSON is the Stack shape (03). Health is "frozen" or "unknown" until informers observe (M9, D-68).
+// JSON is the Stack shape (03); health, drift and services are what the inventory engine last wrote.
 func (x stackRec) JSON() map[string]any {
-	health := "unknown"
-	if x.Frozen {
+	health := x.Health
+	if x.Frozen && health != "unknown" {
 		health = "frozen"
 	}
 	var digest any
@@ -67,7 +73,7 @@ func (x stackRec) JSON() map[string]any {
 	}
 	return map[string]any{"id": x.ID, "namespace": x.NS, "slug": x.Slug, "asset": x.Asset, "target": x.Target, "runtime": x.Runtime,
 		"environment_tier": x.Tier, "k8s_namespace": x.K8sNS, "state": x.State, "safety_profile": x.Profile, "desired_revision": x.Desired,
-		"health": health, "rollout_frozen": x.Frozen, "drift": json.RawMessage(x.Drift), "digest_status": digest, "services": []any{}}
+		"health": health, "rollout_frozen": x.Frozen, "drift": json.RawMessage(x.Drift), "digest_status": digest, "services": json.RawMessage(x.Services), "observed_at": x.Observed}
 }
 
 func (s *server) publishStack(x stackRec) {
@@ -118,6 +124,43 @@ func (s *server) getStack(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	if x, ok := s.loadStack(w, r, p, "viewer", "stack.get"); ok {
 		writeJSON(w, 200, x.JSON())
 	}
+}
+
+func (s *server) listServices(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	if x, ok := s.loadStack(w, r, p, "viewer", "stack.services"); ok {
+		writeJSON(w, 200, map[string]any{"items": json.RawMessage(x.Services)})
+	}
+}
+
+// inventory lists every stack the principal can see, with services (03).
+func (s *server) inventory(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
+	limit, after, ok := page(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.db.Query(stackSel+`WHERE st.id>? AND st.state!='removed' ORDER BY st.id`, after)
+	if err != nil {
+		problem(w, 500, "internal", "query failed")
+		return
+	}
+	var all []stackRec
+	for rows.Next() {
+		x, _ := scanStack(rows)
+		all = append(all, x)
+	}
+	rows.Close()
+	items, next := []map[string]any{}, (*string)(nil)
+	for _, x := range all {
+		if authz.Effective(s.db, p, x.NS) == 0 {
+			continue
+		}
+		if len(items) == limit {
+			next = cursor(items[limit-1]["id"].(string))
+			break
+		}
+		items = append(items, x.JSON())
+	}
+	writeJSON(w, 200, map[string]any{"items": items, "next_cursor": next})
 }
 
 func (s *server) createStack(w http.ResponseWriter, r *http.Request, p *auth.Principal) {

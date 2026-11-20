@@ -18,6 +18,7 @@ import (
 	"github.com/KazzyAPI/control-8/internal/api"
 	"github.com/KazzyAPI/control-8/internal/auth"
 	"github.com/KazzyAPI/control-8/internal/config"
+	"github.com/KazzyAPI/control-8/internal/inventory"
 	rt "github.com/KazzyAPI/control-8/internal/runtime"
 	k8s "github.com/KazzyAPI/control-8/internal/runtime/kubernetes"
 	"github.com/KazzyAPI/control-8/internal/store"
@@ -84,8 +85,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	tc.Run(ctx, cfg.TargetCheck)
+	inv := inventory.New(db, time.Second)
+	mgr := &inventory.Manager{E: inv, Targets: tc, Drivers: drivers, Resync: cfg.InformerResync, Every: cfg.TargetCheck}
+	invDone := make(chan struct{})
+	go func() { mgr.Run(ctx); close(invDone) }()
 	// BaseContext ends open SSE streams on shutdown (EVT-015)
-	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg, tc, drivers), ReadHeaderTimeout: 10 * time.Second,
+	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg, tc, drivers, api.WithInventory(inv)), ReadHeaderTimeout: 10 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() {
 		<-ctx.Done()
@@ -98,6 +103,7 @@ func main() {
 		log.Error("serve", "err", err)
 		os.Exit(1)
 	}
+	<-invDone
 	log.Info("shutdown complete")
 }
 

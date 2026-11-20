@@ -250,13 +250,31 @@ func (c *Checker) Check(name string) {
 	old := *t
 	t.Reachable, t.Sync, t.LastError, t.ServerVersion = errText == "", "down", ref(errText), ref(ver)
 	if t.Reachable {
-		t.Sync = "syncing" // M9 replaces this with informer state
+		if t.Sync == "down" { // recovery: the informer manager restarts and sets the real state (K8S-064)
+			t.Sync = "syncing"
+		}
 		now := c.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 		t.LastSeenAt = &now
 	}
 	cur := *t
 	c.mu.Unlock()
 	if c.Publish != nil && !same(old, cur) {
+		c.Publish(cur)
+	}
+}
+
+// SetSync records the informer state of a reachable target and publishes on change (K8S-064).
+func (c *Checker) SetSync(name, state string) {
+	c.mu.Lock()
+	t := c.st[name]
+	if t == nil || !t.Reachable || t.Sync == state {
+		c.mu.Unlock()
+		return
+	}
+	t.Sync = state
+	cur := *t
+	c.mu.Unlock()
+	if c.Publish != nil {
 		c.Publish(cur)
 	}
 }

@@ -19,7 +19,7 @@ type Config struct {
 	Targets, Tokens                                    []json.RawMessage
 	WebhookURL, WebhookSecret, RegistryAuth            string
 	InventoryPoll, RolloutTimeout, DigestPoll          time.Duration
-	TargetCheck                                        time.Duration
+	TargetCheck, InformerResync                        time.Duration
 	DockerHost, ParachuteURL, ParachuteToken           string
 	ParachutePoll                                      time.Duration
 	ParachuteScope, LogLevel                           string
@@ -110,6 +110,7 @@ func Load(getenv func(string) string, readFile func(string) ([]byte, error)) (*C
 		InventoryPoll:     dur("C8_INVENTORY_POLL", "30s", false),
 		RolloutTimeout:    dur("C8_ROLLOUT_TIMEOUT", "5m", false),
 		TargetCheck:       dur("C8_TARGET_CHECK", "30s", false),
+		InformerResync:    dur("C8_INFORMER_RESYNC", "10m", false),
 		DigestPoll:        dur("C8_DIGEST_POLL", "15m", true),
 		DockerHost:        getenv("C8_DOCKER_HOST"),
 		ParachuteURL:      getenv("C8_PARACHUTE_URL"),

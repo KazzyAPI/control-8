@@ -18,6 +18,7 @@ import (
 	"github.com/KazzyAPI/control-8/internal/authz"
 	"github.com/KazzyAPI/control-8/internal/config"
 	"github.com/KazzyAPI/control-8/internal/events"
+	"github.com/KazzyAPI/control-8/internal/inventory"
 	"github.com/KazzyAPI/control-8/internal/store"
 	"github.com/KazzyAPI/control-8/internal/targets"
 )
@@ -36,8 +37,9 @@ type server struct {
 	streams     map[string]int                                 // open SSE streams per principal (guarded by mu)
 	nstreams    int
 	drivers     DriverFunc
-	locks       sync.Map        // per-stack worker mutex (DOM-001)
-	wg          sync.WaitGroup  // running deployment and webhook goroutines (tests wait on it)
+	locks       sync.Map       // per-stack worker mutex (DOM-001)
+	wg          sync.WaitGroup // running deployment and webhook goroutines (tests wait on it)
+	inv         *inventory.Engine
 	hookBackoff []time.Duration // webhook retry waits; nil = 1s, 5s (GRT-041)
 }
 

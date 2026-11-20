@@ -14,18 +14,37 @@ import (
 
 	"github.com/KazzyAPI/control-8/internal/config"
 	"github.com/KazzyAPI/control-8/internal/events"
+	"github.com/KazzyAPI/control-8/internal/inventory"
 	"github.com/KazzyAPI/control-8/internal/targets"
 )
+
+// Option configures optional collaborators.
+type Option func(*server)
+
+// WithInventory publishes stack.updated whenever the engine changes a stack's observed state (K8S-061).
+func WithInventory(e *inventory.Engine) Option {
+	return func(s *server) {
+		s.inv = e
+		e.Changed = func(id string) {
+			if x, err := scanStack(s.db.QueryRow(stackSel+`WHERE st.id=?`, id)); err == nil {
+				s.publishStack(x)
+			}
+		}
+	}
+}
 
 // New returns the root handler: health, /api/v1, /auth, request-id + access log (API-007).
 // tc may be nil (no targets); its status changes are published as target.status.
 // drivers may be nil (every deployment then fails target_unreachable).
-func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker, drivers DriverFunc) http.Handler {
+func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker, drivers DriverFunc, opts ...Option) http.Handler {
 	mux := http.NewServeMux()
 	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}, tick: realTick, streams: map[string]int{},
 		bus: events.New(cfg.EventsReplay, time.Now()), targets: tc, drivers: drivers}
 	if tc != nil {
 		tc.Publish = s.publishTarget
+	}
+	for _, o := range opts {
+		o(s)
 	}
 	s.routes(mux)
 	s.recoverDeployments()
