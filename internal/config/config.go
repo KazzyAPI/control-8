@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,6 +22,8 @@ type Config struct {
 	DockerHost, ParachuteURL, ParachuteToken           string
 	ParachutePoll                                      time.Duration
 	ParachuteScope, LogLevel                           string
+	EventsReplay, EventsMaxConns                       int
+	EventsHeartbeat                                    time.Duration
 }
 
 // Error names the offending variable; secret values are never included.
@@ -78,6 +81,14 @@ func Load(getenv func(string) string, readFile func(string) ([]byte, error)) (*C
 		return l
 	}
 
+	num := func(name, d string) int {
+		v, e := strconv.Atoi(def(name, d))
+		if e != nil || v <= 0 {
+			fail(name, "must be a positive integer")
+		}
+		return v
+	}
+
 	c := &Config{
 		Listen:            def("C8_LISTEN", ":8000"),
 		DataDir:           def("C8_DATA_DIR", "/var/lib/control8"),
@@ -104,6 +115,9 @@ func Load(getenv func(string) string, readFile func(string) ([]byte, error)) (*C
 		ParachutePoll:     dur("C8_PARACHUTE_POLL", "30s", false),
 		ParachuteScope:    def("C8_PARACHUTE_SCOPE", "control-8"),
 		LogLevel:          def("C8_LOG_LEVEL", "info"),
+		EventsReplay:      num("C8_EVENTS_REPLAY", "10000"),
+		EventsMaxConns:    num("C8_EVENTS_MAX_CONNS", "500"),
+		EventsHeartbeat:   dur("C8_EVENTS_HEARTBEAT", "15s", false),
 	}
 	if err != nil {
 		return nil, err

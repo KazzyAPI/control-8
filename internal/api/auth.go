@@ -17,6 +17,7 @@ import (
 	"github.com/KazzyAPI/control-8/internal/auth"
 	"github.com/KazzyAPI/control-8/internal/authz"
 	"github.com/KazzyAPI/control-8/internal/config"
+	"github.com/KazzyAPI/control-8/internal/events"
 	"github.com/KazzyAPI/control-8/internal/store"
 )
 
@@ -27,7 +28,11 @@ type server struct {
 	mu       sync.Mutex
 	oidcProv *oidc.Provider
 	// shortcut: in-memory per-IP failure log (lost on restart, keyed by RemoteAddr), fine for a single replica
-	fails map[string][]time.Time
+	fails    map[string][]time.Time
+	bus      *events.Bus
+	tick     func(time.Duration) (<-chan time.Time, func()) // heartbeat clock (faked in tests)
+	streams  map[string]int                                 // open SSE streams per principal (guarded by mu)
+	nstreams int
 }
 
 const cookieName = "c8_session"
@@ -73,7 +78,9 @@ func (s *server) auditNS(r *http.Request, p *auth.Principal, ns, action, ttype, 
 			e.ActorType = "token"
 		}
 	}
-	audit.Write(s.db, e)
+	if a, err := audit.Insert(s.db, e); err == nil {
+		s.publish(events.Event{Type: "audit.created", At: s.now(), Namespace: ns, Data: a})
+	}
 }
 
 // api wraps an /api/v1 handler: authenticate (401), CSRF for cookie writes (API-004), then run.

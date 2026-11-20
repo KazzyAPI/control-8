@@ -20,6 +20,7 @@ func TestConfigTable(t *testing.T) {
 		{"bad duration", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_GRANT_MAX": "4x"}, "C8_GRANT_MAX"},
 		{"grant max over cap", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_GRANT_MAX": "48h"}, "C8_GRANT_MAX"},
 		{"digest poll 0 ok", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_DIGEST_POLL": "0"}, ""},
+		{"events replay 0 bad", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_EVENTS_REPLAY": "0"}, "C8_EVENTS_REPLAY"},
 		{"inventory poll 0 bad", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_INVENTORY_POLL": "0s"}, "C8_INVENTORY_POLL"},
 		{"targets not json", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_TARGETS": "{"}, "C8_TARGETS"},
 		{"tokens from file", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_TOKENS_FILE": "/s/tok"}, ""},

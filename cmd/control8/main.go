@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -55,9 +56,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg), ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// BaseContext ends open SSE streams on shutdown (EVT-015)
+	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg), ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

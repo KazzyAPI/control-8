@@ -25,7 +25,10 @@ func nz(s string) any {
 }
 
 // Write appends one event. Details must already be redacted by the caller (DOM-010).
-func Write(db *sql.DB, e Event) error {
+func Write(db *sql.DB, e Event) error { _, err := Insert(db, e); return err }
+
+// Insert is Write that also returns the AuditEvent API shape, for the audit.created event (10 catalogue).
+func Insert(db *sql.DB, e Event) (map[string]any, error) {
 	if e.ActorType == "" {
 		e.ActorType = "system"
 	}
@@ -36,8 +39,19 @@ func Write(db *sql.DB, e Event) error {
 	if e.Details == nil {
 		d = []byte("{}")
 	}
-	_, err := db.Exec(`INSERT INTO audit_event(at,actor_type,actor_id,actor_display,auth_method,namespace_id,action,target_type,target_id,outcome,details,request_id)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, store.Ts(time.Now()), e.ActorType, nz(e.ActorID), nz(e.ActorDisplay), nz(e.AuthMethod),
+	at := store.Ts(time.Now())
+	res, err := db.Exec(`INSERT INTO audit_event(at,actor_type,actor_id,actor_display,auth_method,namespace_id,action,target_type,target_id,outcome,details,request_id)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, at, e.ActorType, nz(e.ActorID), nz(e.ActorDisplay), nz(e.AuthMethod),
 		nz(e.Namespace), e.Action, nz(e.TargetType), nz(e.TargetID), e.Outcome, string(d), nz(e.RequestID))
-	return err
+	if err != nil {
+		return nil, err
+	}
+	id, _ := res.LastInsertId()
+	det := e.Details
+	if det == nil {
+		det = map[string]any{}
+	}
+	return map[string]any{"id": id, "at": at, "actor_type": e.ActorType, "actor_id": nz(e.ActorID), "actor_display": nz(e.ActorDisplay),
+		"auth_method": nz(e.AuthMethod), "namespace": nz(e.Namespace), "action": e.Action, "target_type": nz(e.TargetType),
+		"target_id": nz(e.TargetID), "outcome": e.Outcome, "details": det, "request_id": nz(e.RequestID)}, nil
 }

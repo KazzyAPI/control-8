@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/KazzyAPI/control-8/internal/config"
+	"github.com/KazzyAPI/control-8/internal/events"
 )
 
 // New returns the root handler: health, /api/v1, /auth, request-id + access log (API-007).
 func New(db *sql.DB, log *slog.Logger, cfg *config.Config) http.Handler {
 	mux := http.NewServeMux()
-	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}}
+	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}, tick: realTick, streams: map[string]int{},
+		bus: events.New(cfg.EventsReplay, time.Now())}
 	s.routes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +38,8 @@ type statusWriter struct {
 	http.ResponseWriter
 	status int
 }
+
+func (s *statusWriter) Flush() { s.ResponseWriter.(http.Flusher).Flush() }
 
 func (s *statusWriter) WriteHeader(c int) { s.status = c; s.ResponseWriter.WriteHeader(c) }
 

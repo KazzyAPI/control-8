@@ -18,6 +18,7 @@ import (
 	"github.com/KazzyAPI/control-8/internal/auth"
 	"github.com/KazzyAPI/control-8/internal/authz"
 	"github.com/KazzyAPI/control-8/internal/config"
+	"github.com/KazzyAPI/control-8/internal/events"
 	"github.com/KazzyAPI/control-8/internal/store"
 )
 
@@ -38,7 +39,9 @@ func newEnv(t *testing.T) *env {
 	t.Cleanup(func() { db.Close() })
 	buf := &bytes.Buffer{}
 	cfg := &config.Config{PublicURL: "http://localhost:8000", BreakglassHash: auth.HashPassword(bgPass)}
-	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}}
+	cfg.EventsMaxConns = 500
+	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}, streams: map[string]int{}, bus: events.New(100, time.Now()),
+		tick: func(time.Duration) (<-chan time.Time, func()) { return make(chan time.Time), func() {} }}
 	mux := http.NewServeMux()
 	s.routes(mux)
 	return &env{t, s, requestID(accessLog(slog.New(slog.NewJSONHandler(buf, nil)), mux)), buf}

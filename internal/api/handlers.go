@@ -22,6 +22,7 @@ func (s *server) routes(mux *http.ServeMux) (patterns []string) {
 	reg("GET /login", htmlPage("Sign in", `<p><a href="/auth/login">Sign in with OIDC</a></p>`))
 	reg("GET /no-access", htmlPage("No access", "<p>No access: ask an admin to map your group.</p>"))
 	reg("POST /auth/logout", s.api(s.logout))
+	reg("GET /api/v1/events", s.api(s.stream))
 	reg("GET /api/v1/me", s.api(s.me))
 	reg("GET /api/v1/tokens", s.api(s.tokens))
 	reg("GET /api/v1/role-bindings", s.api(s.listBindings))
