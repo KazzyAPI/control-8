@@ -18,6 +18,7 @@ import (
 	"github.com/KazzyAPI/control-8/internal/api"
 	"github.com/KazzyAPI/control-8/internal/auth"
 	"github.com/KazzyAPI/control-8/internal/config"
+	"github.com/KazzyAPI/control-8/internal/digest"
 	"github.com/KazzyAPI/control-8/internal/inventory"
 	rt "github.com/KazzyAPI/control-8/internal/runtime"
 	k8s "github.com/KazzyAPI/control-8/internal/runtime/kubernetes"
@@ -89,9 +90,18 @@ func main() {
 	mgr := &inventory.Manager{E: inv, Targets: tc, Drivers: drivers, Resync: cfg.InformerResync, Every: cfg.TargetCheck}
 	invDone := make(chan struct{})
 	go func() { mgr.Run(ctx); close(invDone) }()
+	kc, err := digest.ParseAuth(cfg.RegistryAuth)
+	if err != nil {
+		log.Error("invalid config", "var", "C8_REGISTRY_AUTH", "err", err) // never the value
+		os.Exit(2)
+	}
+	dp := &digest.Poller{DB: db, Log: log, Resolve: kc.Resolver(), Redact: kc.Redact}
 	// BaseContext ends open SSE streams on shutdown (EVT-015)
-	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg, tc, drivers, api.WithInventory(inv)), ReadHeaderTimeout: 10 * time.Second,
+	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg, tc, drivers, api.WithInventory(inv), api.WithDigest(dp)), ReadHeaderTimeout: 10 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return ctx }}
+	if cfg.DigestPoll > 0 {
+		go dp.Run(ctx, cfg.DigestPoll, func(d time.Duration) (<-chan time.Time, func()) { t := time.NewTicker(d); return t.C, t.Stop })
+	}
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

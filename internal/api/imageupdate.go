@@ -58,6 +58,48 @@ func (s *server) requestImageUpdate(w http.ResponseWriter, r *http.Request, p *a
 	if !ok {
 		return
 	}
+	rv, e := s.createImageUpdate(x, in.Workload, in.Container, in.Image, p.ID)
+	if e != nil {
+		if e.audit != nil {
+			s.auditNS(r, p, x.NS, "image_update.request", "stack", x.ID, "failed", e.audit)
+		}
+		problem(w, e.status, e.code, e.msg)
+		return
+	}
+	s.auditNS(r, p, x.NS, "image_update.request", "revision", rv.id, "success", gr.details(rv.details(x, in.Workload, in.Container, in.Image)))
+	s.publishRevision(x, rv.id)
+	s.enqueue(w, r, p, x, gr, "apply", "image_update", &rv.id, in.Reason, rv.approval)
+}
+
+// updErr is a refused image update; audit (when set) is the details of the "failed" audit event.
+type updErr struct {
+	status    int
+	code, msg string
+	audit     map[string]any
+}
+
+type newRev struct {
+	id           string
+	number, base int
+	old          string
+	approval     bool
+}
+
+func (v newRev) details(x stackRec, workload, container, image string) map[string]any {
+	return map[string]any{"stack": x.Slug, "workload": workload, "container": container, "from": v.old, "to": image, "revision": v.number, "base_revision": v.base}
+}
+
+func (s *server) publishRevision(x stackRec, id string) {
+	full, _ := scanRev(s.db.QueryRow(`SELECT `+revCols+` FROM revision WHERE id=?`, id), x.Runtime, false)
+	s.publish(events.Event{Type: "revision.created", At: s.now(), Namespace: x.NS, Data: full})
+}
+
+// createImageUpdate builds revision N+1 (desired with one container image replaced), re-runs policy and stores it
+// (K8S-052). Shared by the manual route and the digest poll; actor is the revision's created_by.
+func (s *server) createImageUpdate(x stackRec, workload, container, image, actor string) (newRev, *updErr) {
+	fail := func(code int, c, msg string) (newRev, *updErr) {
+		return newRev{}, &updErr{code, c, msg, map[string]any{"reason": c}}
+	}
 	var input, profile, dbs string
 	var timeout int
 	var poll bool
@@ -65,30 +107,27 @@ func (s *server) requestImageUpdate(w http.ResponseWriter, r *http.Request, p *a
 		x.ID, *x.Desired).Scan(&input, &profile, &timeout, &poll, &dbs)
 	objs, err := k8s.Parse(input)
 	if err != nil {
-		problem(w, 500, "internal", "desired revision unreadable")
-		return
+		return newRev{}, &updErr{500, "internal", "desired revision unreadable", nil}
 	}
 	var cont map[string]any
 	for _, o := range objs {
-		if k8s.Name(o) != in.Workload {
+		if k8s.Name(o) != workload {
 			continue
 		}
 		for _, c := range k8s.Containers(o) {
-			if c["name"] == in.Container {
+			if c["name"] == container {
 				cont = c
 			}
 		}
 	}
 	if cont == nil {
-		fail(404, "not_found", "no such workload or container in the desired revision")
-		return
+		return fail(404, "not_found", "no such workload or container in the desired revision")
 	}
 	old, _ := cont["image"].(string)
-	if imageRepo(old) != imageRepo(in.Image) { // a repo change is a structural revision
-		fail(400, "image_repo_change", "image must keep the repository "+imageRepo(old))
-		return
+	if imageRepo(old) != imageRepo(image) { // a repo change is a structural revision
+		return fail(400, "image_repo_change", "image must keep the repository "+imageRepo(old))
 	}
-	cont["image"] = in.Image
+	cont["image"] = image
 	b, _ := yaml.Marshal(objs[0])
 	docs := []string{string(b)}
 	for _, o := range objs[1:] {
@@ -101,8 +140,7 @@ func (s *server) requestImageUpdate(w http.ResponseWriter, r *http.Request, p *a
 	var open int
 	s.db.QueryRow(`SELECT count(*) FROM deployment WHERE stack_id=? AND status IN ('queued','running')`, x.ID).Scan(&open)
 	if open > 0 {
-		fail(409, "deployment_in_progress", "the stack already has a queued or running deployment")
-		return
+		return fail(409, "deployment_in_progress", "the stack already has a queued or running deployment")
 	}
 	var number int
 	s.db.QueryRow(`SELECT COALESCE(MAX(number),0)+1 FROM revision WHERE stack_id=?`, x.ID).Scan(&number)
@@ -110,27 +148,20 @@ func (s *server) requestImageUpdate(w http.ResponseWriter, r *http.Request, p *a
 	rendered, inv := k8s.Render(objs, x.ID, x.K8sNamespace(), number, profile)
 	pr, err := s.policyResult(x, evalObjs, rendered, profile, dbl)
 	if err != nil {
-		problem(w, 500, "internal", "policy unavailable")
-		return
+		return newRev{}, &updErr{500, "internal", "policy unavailable", nil}
 	}
 	if !pr.Allowed {
 		var rules []string
 		for _, v := range pr.Violations {
 			rules = append(rules, v.Rule)
 		}
-		s.auditNS(r, p, x.NS, "image_update.request", "stack", x.ID, "failed", map[string]any{"reason": "policy_violation", "violations": rules})
-		problem(w, 422, "policy_violation", "revision violates policy: "+strings.Join(rules, ", "))
-		return
+		return newRev{}, &updErr{422, "policy_violation", "revision violates policy: " + strings.Join(rules, ", "),
+			map[string]any{"reason": "policy_violation", "violations": rules}}
 	}
 	id, now := auth.NewID("rev"), store.Ts(s.now())
 	if _, err := s.db.Exec(`INSERT INTO revision(id,stack_id,number,safety_profile,origin,base_revision,manifests_input,rendered,inventory,rollout_timeout_seconds,digest_poll,database_services,policy_result,created_by,created_at)
-		VALUES(?,?,?,?,'image_update',?,?,?,?,?,?,?,?,?,?)`, id, x.ID, number, profile, *x.Desired, newInput, mj(rendered), mj(inv), timeout, poll, mj(dbl), mj(pr), p.ID, now); err != nil {
-		problem(w, 409, "revision_conflict", "concurrent revision; retry")
-		return
+		VALUES(?,?,?,?,'image_update',?,?,?,?,?,?,?,?,?,?)`, id, x.ID, number, profile, *x.Desired, newInput, mj(rendered), mj(inv), timeout, poll, mj(dbl), mj(pr), actor, now); err != nil {
+		return newRev{}, &updErr{409, "revision_conflict", "concurrent revision; retry", nil}
 	}
-	s.auditNS(r, p, x.NS, "image_update.request", "revision", id, "success", gr.details(map[string]any{
-		"stack": x.Slug, "workload": in.Workload, "container": in.Container, "from": old, "to": in.Image, "revision": number, "base_revision": *x.Desired}))
-	full, _ := scanRev(s.db.QueryRow(`SELECT `+revCols+` FROM revision WHERE id=?`, id), x.Runtime, false)
-	s.publish(events.Event{Type: "revision.created", At: s.now(), Namespace: x.NS, Data: full})
-	s.enqueue(w, r, p, x, gr, "apply", "image_update", &id, in.Reason, pr.RequiresApproval)
+	return newRev{id, number, *x.Desired, old, pr.RequiresApproval}, nil
 }
