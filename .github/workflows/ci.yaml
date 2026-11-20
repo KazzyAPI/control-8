@@ -43,3 +43,43 @@ jobs:
         run: make build
       - run: cd web && npx playwright install --with-deps chromium
       - run: cd web && npm run e2e
+
+  # M16: the release image builds, runs as 10001, and the shipped deploy/kubernetes manifests work on kind.
+  image:
+    runs-on: ubuntu-latest
+    env: {C8_PW: ci-smoke-password}
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t control8:ci .
+      - name: Container is non-root, serves /healthz and the SPA
+        run: |
+          set -eu
+          [ "$(docker image inspect -f '{{.Config.User}}' control8:ci)" = 10001:10001 ]
+          docker run -d --name c8 --read-only -p 8000:8000 -v c8data:/var/lib/control8 -e C8_PUBLIC_URL=http://localhost:8000 control8:ci
+          for i in $(seq 30); do curl -fsS -m 2 localhost:8000/healthz >/dev/null && break; sleep 1; done
+          # distroless has no `id`: read the uid of the running process from the host
+          [ "$(ps -o uid= -p "$(docker inspect -f '{{.State.Pid}}' c8)" | tr -d ' ')" = 10001 ]
+          curl -fsS localhost:8000/healthz
+          curl -fsS localhost:8000/ | grep -i '<div id="root"'
+          curl -fsSI localhost:8000/ | grep -i '^content-security-policy:'
+          docker rm -f c8
+      - uses: helm/kind-action@v1
+        with: {cluster_name: c8-image}
+      - name: Install deploy/kubernetes with the image
+        run: |
+          set -eu
+          kind load docker-image control8:ci --name c8-image
+          HASH=$(printf %s "$C8_PW" | docker run -i --rm control8:ci hash-password)
+          kubectl create namespace control8
+          kubectl -n control8 create secret generic control8-secrets --from-literal=C8_BREAKGLASS_HASH="$HASH"
+          sed 's#ghcr.io/kazzyapi/control-8:dev#control8:ci#' deploy/kubernetes/control8.yaml | kubectl apply -f -
+          kubectl apply -f deploy/kubernetes/rbac.yaml
+          kubectl -n control8 rollout status deployment/control8 --timeout=180s
+      - name: Smoke
+        run: |
+          kubectl -n control8 port-forward svc/control8 8000:8000 >/dev/null 2>&1 &
+          sleep 3
+          C8_SMOKE_PASSWORD="$C8_PW" scripts/smoke.sh
+      - name: Control 8 logs
+        if: failure()
+        run: kubectl -n control8 logs deployment/control8 --tail=200 || true

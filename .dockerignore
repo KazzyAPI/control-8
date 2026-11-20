@@ -1,5 +1,11 @@
-tmp
 .git
-docs
+bin
+tmp
+*.db
+*.db-*
+deploy/*.env
+.claude
 web/node_modules
+web/dist
 web/test-results
+web/playwright-report

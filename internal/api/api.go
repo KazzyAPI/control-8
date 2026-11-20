@@ -67,7 +67,19 @@ func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker, 
 		}
 	})
 	mux.Handle("/", web.Handler(webfs.Dist())) // SPA + history fallback (UI-005)
-	return requestID(accessLog(log, mux))
+	return requestID(secHeaders(accessLog(log, mux)))
+}
+
+// secHeaders sets the UI-005 CSP and the baseline browser protections on every response (M16).
+func secHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy", "default-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
 }
 
 type statusWriter struct {
