@@ -33,6 +33,7 @@ func (s *server) routes(mux *http.ServeMux) (patterns []string) {
 	s.nsRoutes(reg)
 	s.stackRoutes(reg)
 	s.depRoutes(reg)
+	s.grantRoutes(reg)
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) { problem(w, 404, "not_found", "no such route") })
 	return
 }
@@ -62,7 +63,7 @@ func (s *server) me(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	}
 	writeJSON(w, 200, map[string]any{"id": p.ID, "display_name": p.Display, "auth_method": p.AuthMethod,
 		"global_admin": authz.Effective(s.db, p, "") == 4, "csrf_token": csrf,
-		"approver_for": s.approverFor(p.Groups), "namespaces": ns, "active_grants": []any{}})
+		"approver_for": s.approverFor(p.Groups), "namespaces": ns, "active_grants": s.activeGrants(p)})
 }
 
 // tokens lists configured tokens: own (same owner), or all for global_admin. Never the hash (AUTH-033).

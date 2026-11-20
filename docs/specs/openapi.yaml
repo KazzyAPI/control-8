@@ -151,7 +151,6 @@ paths:
     post: {tags: [deployments], operationId: cancelDeployment, responses: {'200': {description: Cancelled, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /access-grants:
-    x-milestone: M8
     get:
       tags: [access-grants]
       operationId: listAccessGrants
@@ -169,14 +168,11 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrantCreate'}}}}
       responses: {'201': {description: Requested, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '400': {$ref: '#/components/responses/Problem'}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /access-grants/mine:
-    x-milestone: M8
     get: {tags: [access-grants], operationId: listMyAccessGrants, responses: {'200': {description: Caller's grants, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrantList'}}}}}}
   /access-grants/{id}:
-    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     get: {tags: [access-grants], operationId: getAccessGrant, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '404': {$ref: '#/components/responses/Problem'}}}
   /access-grants/{id}/approve:
-    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     post:
       tags: [access-grants]
@@ -185,11 +181,9 @@ paths:
       requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {duration_minutes: {type: integer, minimum: 15, description: May only shorten}, note: {type: string, maxLength: 500}}}}}}
       responses: {'200': {description: Approved or active, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /access-grants/{id}/deny:
-    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [access-grants], operationId: denyAccessGrant, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [note], additionalProperties: false, properties: {note: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Denied, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
   /access-grants/{id}/revoke:
-    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [access-grants], operationId: revokeAccessGrant, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], additionalProperties: false, properties: {reason: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Revoked, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
 

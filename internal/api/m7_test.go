@@ -320,9 +320,9 @@ func TestM7_Refusals(t *testing.T) {
 			t.Errorf("%s = %d want %d", c.body, got, c.want)
 		}
 	}
-	// prod stack: refused for everyone, with scope, nothing queued
+	// prod stack: refused without a grant (GRT-011), with scope, nothing queued
 	m.s.db.Exec(`UPDATE target SET environment_tier='prod'`)
-	w := m.do("POST", "/api/v1/namespaces/a/stacks/s1/deployments", body("1", "as_is", "prod"), m.admin)
+	w := m.do("POST", "/api/v1/namespaces/a/stacks/s1/deployments", body("1", "as_is", "prod"), m.op)
 	if w.Code != 403 || !strings.Contains(w.Body.String(), `"grant_required"`) || !strings.Contains(w.Body.String(), `"scope"`) {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}

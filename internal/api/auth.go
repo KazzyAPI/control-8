@@ -29,15 +29,16 @@ type server struct {
 	mu       sync.Mutex
 	oidcProv *oidc.Provider
 	// shortcut: in-memory per-IP failure log (lost on restart, keyed by RemoteAddr), fine for a single replica
-	fails    map[string][]time.Time
-	bus      *events.Bus
-	targets  *targets.Checker
-	tick     func(time.Duration) (<-chan time.Time, func()) // heartbeat clock (faked in tests)
-	streams  map[string]int                                 // open SSE streams per principal (guarded by mu)
-	nstreams int
-	drivers  DriverFunc
-	locks    sync.Map       // per-stack worker mutex (DOM-001)
-	wg       sync.WaitGroup // running deployment goroutines (tests wait on it)
+	fails       map[string][]time.Time
+	bus         *events.Bus
+	targets     *targets.Checker
+	tick        func(time.Duration) (<-chan time.Time, func()) // heartbeat clock (faked in tests)
+	streams     map[string]int                                 // open SSE streams per principal (guarded by mu)
+	nstreams    int
+	drivers     DriverFunc
+	locks       sync.Map        // per-stack worker mutex (DOM-001)
+	wg          sync.WaitGroup  // running deployment and webhook goroutines (tests wait on it)
+	hookBackoff []time.Duration // webhook retry waits; nil = 1s, 5s (GRT-041)
 }
 
 const cookieName = "c8_session"

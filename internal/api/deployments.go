@@ -78,7 +78,11 @@ func (s *server) publishDep(id string) {
 
 // auditSys records a worker outcome as a system action and publishes audit.created.
 func (s *server) auditSys(ns, action, depID, outcome string, d map[string]any) {
-	if a, err := audit.Insert(s.db, audit.Event{Namespace: ns, Action: action, TargetType: "deployment", TargetID: depID, Outcome: outcome, Details: d}); err == nil {
+	s.auditSystem(ns, action, "deployment", depID, outcome, d)
+}
+
+func (s *server) auditSystem(ns, action, ttype, id, outcome string, d map[string]any) {
+	if a, err := audit.Insert(s.db, audit.Event{Namespace: ns, Action: action, TargetType: ttype, TargetID: id, Outcome: outcome, Details: d}); err == nil {
 		s.publish(events.Event{Type: "audit.created", At: s.now(), Namespace: ns, Data: a})
 	}
 }
@@ -142,8 +146,9 @@ func (s *server) listDeployments(w http.ResponseWriter, r *http.Request, p *auth
 }
 
 // gate runs the checks shared by apply and teardown requests; it writes the problem and returns false on refusal.
-// Prod needs an access grant (M8 adds them): until then prod stacks refuse every deployment (D-71).
-func (s *server) gate(w http.ResponseWriter, r *http.Request, p *auth.Principal, x stackRec, action, confirmTier string) bool {
+// Prod needs an active access grant or a break-glass session (GRT-010..016); the result is recorded on the deployment.
+func (s *server) gate(w http.ResponseWriter, r *http.Request, p *auth.Principal, x stackRec, action, confirmTier string) (grantRef, bool) {
+	var gr grantRef
 	var managed string
 	s.db.QueryRow(`SELECT a.managed_by FROM asset a JOIN stack st ON st.asset_id=a.id WHERE st.id=?`, x.ID).Scan(&managed)
 	switch {
@@ -154,18 +159,13 @@ func (s *server) gate(w http.ResponseWriter, r *http.Request, p *auth.Principal,
 		problem(w, 409, "argo_managed", "asset is managed by Argo CD")
 	case confirmTier != x.Tier:
 		problem(w, 400, "environment_tier_mismatch", "confirm_environment_tier must be "+x.Tier)
-	case x.Tier == "prod":
-		s.auditNS(r, p, x.NS, action, "stack", x.ID, "denied", map[string]any{"reason": "grant_required"})
-		w.Header().Set("Content-Type", "application/problem+json")
-		w.WriteHeader(403)
-		json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": "Forbidden", "status": 403, "code": "grant_required",
-			"detail": "prod deployments need an active access grant", "scope": map[string]string{"target": x.Target, "namespace": x.NS}})
+	case !s.grantOK(w, r, p, x, action, &gr):
 	case s.targets != nil && !s.reachable(x.Target):
 		problem(w, 503, "target_unreachable", "target is not reachable")
 	default:
-		return true
+		return gr, true
 	}
-	return false
+	return gr, false
 }
 
 func (s *server) reachable(target string) bool {
@@ -174,7 +174,7 @@ func (s *server) reachable(target string) bool {
 }
 
 // enqueue inserts the deployment (DOM-001 is enforced by the unique index) and answers 202.
-func (s *server) enqueue(w http.ResponseWriter, r *http.Request, p *auth.Principal, x stackRec, action string, revID *string, reason string, approval bool) {
+func (s *server) enqueue(w http.ResponseWriter, r *http.Request, p *auth.Principal, x stackRec, gr grantRef, action string, revID *string, reason string, approval bool) {
 	status := "queued"
 	if approval {
 		status = "pending_approval"
@@ -184,13 +184,13 @@ func (s *server) enqueue(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	if reason != "" {
 		rs = reason
 	}
-	if _, err := s.db.Exec(`INSERT INTO deployment(id,stack_id,revision_id,action,status,requested_by,reason,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		id, x.ID, revID, action, status, p.ID, rs, now, now); err != nil {
-		s.auditNS(r, p, x.NS, "deployment.request", "stack", x.ID, "failed", map[string]any{"reason": "deployment_in_progress"})
+	if _, err := s.db.Exec(`INSERT INTO deployment(id,stack_id,revision_id,action,status,requested_by,reason,grant_id,grant_bypass,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+		id, x.ID, revID, action, status, p.ID, rs, nz(gr.ID), nz(gr.Bypass), now, now); err != nil {
+		s.auditNS(r, p, x.NS, "deployment.request", "stack", x.ID, "failed", gr.details(map[string]any{"reason": "deployment_in_progress"}))
 		problem(w, 409, "deployment_in_progress", "the stack already has a queued or running deployment")
 		return
 	}
-	s.auditNS(r, p, x.NS, "deployment.request", "deployment", id, "success", map[string]any{"stack": x.Slug, "action": action, "status": status})
+	s.auditNS(r, p, x.NS, "deployment.request", "deployment", id, "success", gr.details(map[string]any{"stack": x.Slug, "action": action, "status": status}))
 	s.publishDep(id)
 	if status == "queued" {
 		s.dispatch(id)
@@ -221,7 +221,8 @@ func (s *server) requestDeployment(w http.ResponseWriter, r *http.Request, p *au
 		problem(w, 404, "not_found", "no such revision")
 		return
 	}
-	if !s.gate(w, r, p, x, "deployment.request", in.Tier) {
+	gr, ok := s.gate(w, r, p, x, "deployment.request", in.Tier)
+	if !ok {
 		return
 	}
 	if in.Profile != profile {
@@ -253,7 +254,7 @@ func (s *server) requestDeployment(w http.ResponseWriter, r *http.Request, p *au
 		problem(w, 422, "policy_violation", "revision violates policy: "+strings.Join(rules, ", "))
 		return
 	}
-	s.enqueue(w, r, p, x, "apply", &revID, in.Reason, res.RequiresApproval)
+	s.enqueue(w, r, p, x, gr, "apply", &revID, in.Reason, res.RequiresApproval)
 }
 
 // teardown is DELETE on a deployed stack: reason required, POL-R10 sends database stacks to approval.
@@ -272,7 +273,8 @@ func (s *server) teardown(w http.ResponseWriter, r *http.Request, p *auth.Princi
 		problem(w, 400, "invalid_body", "reason is required for teardown")
 		return
 	}
-	if !s.gate(w, r, p, x, "deployment.request", in.Tier) {
+	gr, ok := s.gate(w, r, p, x, "deployment.request", in.Tier)
+	if !ok {
 		return
 	}
 	rules, err := s.rules(x.NSID)
@@ -286,7 +288,7 @@ func (s *server) teardown(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	}
 	var dbl []string
 	json.Unmarshal([]byte(dbs), &dbl)
-	s.enqueue(w, r, p, x, "teardown", nil, in.Reason, rules.ProtectedDBApproval && len(dbl) > 0)
+	s.enqueue(w, r, p, x, gr, "teardown", nil, in.Reason, rules.ProtectedDBApproval && len(dbl) > 0)
 }
 
 func (s *server) approveDeployment(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
@@ -302,9 +304,13 @@ func (s *server) approveDeployment(w http.ResponseWriter, r *http.Request, p *au
 		s.auditNS(r, p, d.NS, "deployment.approve", "deployment", d.ID, "denied", map[string]any{"reason": "self_approval"})
 		problem(w, 403, "self_approval", "the approver must differ from the requester")
 		return
-	case d.Tier == "prod": // grants arrive in M8 (D-71)
-		s.auditNS(r, p, d.NS, "deployment.approve", "deployment", d.ID, "denied", map[string]any{"reason": "grant_required"})
-		problem(w, 403, "grant_required", "prod deployments need an active access grant")
+	}
+	// GRT-010: the approver of a prod deployment needs a grant of their own (or break-glass).
+	var gr grantRef
+	if x, err := scanStack(s.db.QueryRow(stackSel+`WHERE st.id=?`, d.StackID)); err != nil || !s.grantOK(w, r, p, x, "deployment.approve", &gr) {
+		if err != nil {
+			problem(w, 500, "internal", "stack unavailable")
+		}
 		return
 	}
 	res, err := s.db.Exec(`UPDATE deployment SET status='queued',approved_by=?,updated_at=? WHERE id=? AND status='pending_approval'`, p.ID, store.Ts(s.now()), d.ID)
@@ -317,7 +323,7 @@ func (s *server) approveDeployment(w http.ResponseWriter, r *http.Request, p *au
 		problem(w, 409, "invalid_state", "deployment is not pending approval")
 		return
 	}
-	s.auditNS(r, p, d.NS, "deployment.approve", "deployment", d.ID, "success", nil)
+	s.auditNS(r, p, d.NS, "deployment.approve", "deployment", d.ID, "success", gr.details(nil))
 	s.publishDep(d.ID)
 	s.dispatch(d.ID)
 	d, _ = scanDep(s.db.QueryRow(depSel+`WHERE d.id=?`, d.ID))
@@ -424,6 +430,12 @@ func (s *server) execute(id string) {
 	mu.Lock()
 	defer mu.Unlock()
 	now := store.Ts(s.now())
+	if !s.grantStillValid(d) { // GRT-012: nothing is applied on an expired or revoked grant
+		s.db.Exec(`UPDATE deployment SET status='failed',error='grant_expired',finished_at=?,updated_at=? WHERE id=? AND status='queued'`, now, now, id)
+		s.auditSys(d.NS, "deployment.run", d.ID, "failed", grantRef{ptrStr(d.GrantID), ptrStr(d.GrantBypass)}.details(map[string]any{"stack": d.Stack, "action": d.Action, "error": "grant_expired"}))
+		s.publishDep(id)
+		return
+	}
 	if res, _ := s.db.Exec(`UPDATE deployment SET status='running',started_at=?,updated_at=? WHERE id=? AND status='queued'`, now, now, id); res != nil {
 		if n, _ := res.RowsAffected(); n == 0 {
 			return // cancelled while queued
@@ -478,7 +490,7 @@ func (s *server) finish(d depRec, x stackRec, number int, profile, out string, r
 	}
 	status, now := "succeeded", store.Ts(s.now())
 	var errText any
-	details := map[string]any{"stack": x.Slug, "action": d.Action}
+	details := grantRef{ptrStr(d.GrantID), ptrStr(d.GrantBypass)}.details(map[string]any{"stack": x.Slug, "action": d.Action})
 	outcome := "success"
 	if runErr != nil {
 		status, outcome, errText = "failed", "failed", runErr.Error()
