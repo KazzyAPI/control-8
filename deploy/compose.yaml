@@ -1,0 +1,16 @@
+name: control8
+services:
+  control8:
+    image: ghcr.io/kazzyapi/control-8:${C8_VERSION:-dev}
+    container_name: control8
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    env_file:
+      - {path: ./control8.env, required: false}
+      - {path: ./control8.secrets.env, required: false}
+    environment:
+      C8_PUBLIC_URL: ${C8_PUBLIC_URL:-http://localhost:8000}
+    volumes: [control8-data:/var/lib/control8]
+    ports: ["${C8_PORT:-8000}:8000"]
+volumes: {control8-data: {}}

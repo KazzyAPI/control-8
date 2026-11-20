@@ -1,0 +1,568 @@
+openapi: 3.1.0
+info:
+  title: Control 8 API
+  version: 0.2.0
+  description: Kubernetes governance control plane (Docker + Parachute as a later track). Sketch; 03-api.md, 08 and 09 are normative where this is silent. Operations with x-milestone docker are not in v1.
+servers:
+  - url: /api/v1
+security:
+  - bearer: []
+  - session: []
+tags:
+  - {name: meta}
+  - {name: events, description: 'Live updates over SSE (10-events.md is normative for framing)'}
+  - {name: targets}
+  - {name: namespaces}
+  - {name: assets}
+  - {name: stacks}
+  - {name: deployments}
+  - {name: access-grants}
+  - {name: policy}
+  - {name: access}
+  - {name: audit}
+  - {name: parachute, description: Docker track (later)}
+
+paths:
+  /events:
+    get:
+      tags: [events]
+      operationId: getEvents
+      description: 'Server-Sent Events stream. Each SSE message has id (monotonic), event (= type) and data (an Event JSON). Heartbeat comments every 15 s. Resume with Last-Event-ID. Filtered per viewer (10).'
+      parameters:
+        - {name: types, in: query, schema: {type: string}, description: 'Comma-separated EventType values'}
+        - {name: namespace, in: query, schema: {$ref: '#/components/schemas/Slug'}}
+        - {name: Last-Event-ID, in: header, schema: {type: string}}
+        - {name: last_event_id, in: query, schema: {type: string}}
+      responses:
+        '200': {description: Event stream, content: {text/event-stream: {schema: {$ref: '#/components/schemas/Event'}}}}
+        '401': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+  /me:
+    get: {tags: [meta], operationId: getMe, responses: {'200': {description: Principal, content: {application/json: {schema: {$ref: '#/components/schemas/Principal'}}}}}}
+  /inventory:
+    get: {tags: [stacks], operationId: getInventory, responses: {'200': {description: All visible stacks, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
+
+  /targets:
+    get: {tags: [targets], operationId: listTargets, description: 'Read-only; targets are defined in C8_TARGETS (D-49)', responses: {'200': {description: Targets, content: {application/json: {schema: {$ref: '#/components/schemas/TargetList'}}}}}}
+  /targets/{target}:
+    parameters: [{name: target, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
+    get: {tags: [targets], operationId: getTarget, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Target'}}}}}}
+
+  /namespaces:
+    get: {tags: [namespaces], operationId: listNamespaces, parameters: [{$ref: '#/components/parameters/limit'}, {$ref: '#/components/parameters/cursor'}], responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceList'}}}}}}
+    post:
+      tags: [namespaces]
+      operationId: createNamespace
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceCreate'}}}}
+      responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}, '409': {$ref: '#/components/responses/Problem'}}
+  /namespaces/{ns}:
+    parameters: [{$ref: '#/components/parameters/ns'}]
+    get: {tags: [namespaces], operationId: getNamespace, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}, '404': {$ref: '#/components/responses/Problem'}}}
+    patch: {tags: [namespaces], operationId: updateNamespace, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}}}
+    delete: {tags: [namespaces], operationId: deleteNamespace, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
+
+  /namespaces/{ns}/assets:
+    parameters: [{$ref: '#/components/parameters/ns'}]
+    get: {tags: [assets], operationId: listAssets, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AssetList'}}}}}}
+    post: {tags: [assets], operationId: createAsset, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
+  /namespaces/{ns}/assets/{asset}:
+    parameters: [{$ref: '#/components/parameters/ns'}, {name: asset, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
+    get: {tags: [assets], operationId: getAsset, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
+    patch: {tags: [assets], operationId: updateAsset, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
+    delete: {tags: [assets], operationId: deleteAsset, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
+
+  /namespaces/{ns}/stacks:
+    parameters: [{$ref: '#/components/parameters/ns'}]
+    get: {tags: [stacks], operationId: listStacks, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
+    post:
+      tags: [stacks]
+      operationId: createStack
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StackCreate'}}}}
+      responses: {'201': {description: Draft stack, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
+  /namespaces/{ns}/stacks/{stack}:
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    get: {tags: [stacks], operationId: getStack, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}}}
+    delete:
+      tags: [stacks]
+      operationId: deleteOrTeardownStack
+      description: Prod stacks need an active access grant (09).
+      requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {reason: {type: string, minLength: 1}, confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}}}}}}
+      responses: {'204': {description: Draft deleted}, '202': {description: Teardown deployment, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
+  /namespaces/{ns}/stacks/{stack}/revisions:
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    get: {tags: [stacks], operationId: listRevisions, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RevisionList'}}}}}}
+    post:
+      tags: [stacks]
+      operationId: createRevision
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RevisionCreate'}}}}
+      responses: {'201': {description: Created (may be policy-disallowed), content: {application/json: {schema: {$ref: '#/components/schemas/Revision'}}}}, '400': {$ref: '#/components/responses/Problem'}, '422': {$ref: '#/components/responses/Problem'}}
+  /namespaces/{ns}/stacks/{stack}/revisions/{n}:
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}, {name: n, in: path, required: true, schema: {type: integer, minimum: 1}}]
+    get: {tags: [stacks], operationId: getRevision, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Revision'}}}}}}
+  /namespaces/{ns}/stacks/{stack}/revisions/{n}/diff:
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}, {name: n, in: path, required: true, schema: {type: integer}}, {name: against, in: query, required: true, schema: {type: integer}}]
+    get: {tags: [stacks], operationId: diffRevision, responses: {'200': {description: Unified diff, content: {text/plain: {schema: {type: string}}}}}}
+  /namespaces/{ns}/stacks/{stack}/deployments:
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    get: {tags: [deployments], operationId: listDeployments, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DeploymentList'}}}}}}
+    post:
+      tags: [deployments]
+      operationId: requestDeployment
+      description: Prod stacks need an active access grant (403 grant_required).
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/DeploymentCreate'}}}}
+      responses:
+        '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}
+        '400': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /namespaces/{ns}/stacks/{stack}/image-updates:
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    post:
+      tags: [deployments]
+      operationId: requestImageUpdate
+      description: kubernetes + managed_rollout + active stacks only (K8S-050). Creates revision N+1 and a deployment.
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ImageUpdateCreate'}}}}
+      responses:
+        '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}
+        '400': {$ref: '#/components/responses/Problem'}
+        '403': {$ref: '#/components/responses/Problem'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+  /namespaces/{ns}/stacks/{stack}/services:
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    get: {tags: [stacks], operationId: listServices, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Service'}}}}}}}}}
+
+  /deployments/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [deployments], operationId: getDeployment, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}}}
+  /deployments/{id}/approve:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [deployments], operationId: approveDeployment, responses: {'200': {description: Approved, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
+  /deployments/{id}/reject:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [deployments], operationId: rejectDeployment, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string}}}}}}, responses: {'200': {description: Rejected, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}}}
+  /deployments/{id}/cancel:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [deployments], operationId: cancelDeployment, responses: {'200': {description: Cancelled, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
+
+  /access-grants:
+    get:
+      tags: [access-grants]
+      operationId: listAccessGrants
+      parameters:
+        - {name: status, in: query, schema: {$ref: '#/components/schemas/GrantStatus'}}
+        - {name: namespace, in: query, schema: {type: string}}
+        - {name: target, in: query, schema: {type: string}}
+        - {name: requester, in: query, schema: {type: string}}
+        - {$ref: '#/components/parameters/limit'}
+        - {$ref: '#/components/parameters/cursor'}
+      responses: {'200': {description: 'global_admin: all; approver-group members: their namespaces; others: own', content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrantList'}}}}}
+    post:
+      tags: [access-grants]
+      operationId: requestAccessGrant
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrantCreate'}}}}
+      responses: {'201': {description: Requested, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '400': {$ref: '#/components/responses/Problem'}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
+  /access-grants/mine:
+    get: {tags: [access-grants], operationId: listMyAccessGrants, responses: {'200': {description: Caller's grants, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrantList'}}}}}}
+  /access-grants/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [access-grants], operationId: getAccessGrant, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '404': {$ref: '#/components/responses/Problem'}}}
+  /access-grants/{id}/approve:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post:
+      tags: [access-grants]
+      operationId: approveAccessGrant
+      description: Elevated approval. Caller must be a member of the namespace's approver_group and not the requester; session only. One approval suffices.
+      requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {duration_minutes: {type: integer, minimum: 15, description: May only shorten}, note: {type: string, maxLength: 500}}}}}}
+      responses: {'200': {description: Approved or active, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
+  /access-grants/{id}/deny:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [access-grants], operationId: denyAccessGrant, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [note], additionalProperties: false, properties: {note: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Denied, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
+  /access-grants/{id}/revoke:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [access-grants], operationId: revokeAccessGrant, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], additionalProperties: false, properties: {reason: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Revoked, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
+
+  /policies/global:
+    get: {tags: [policy], operationId: getGlobalPolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
+    put: {tags: [policy], operationId: putGlobalPolicy, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
+  /namespaces/{ns}/policy:
+    parameters: [{$ref: '#/components/parameters/ns'}]
+    get: {tags: [policy], operationId: getNamespacePolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
+    put: {tags: [policy], operationId: putNamespacePolicy, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
+  /namespaces/{ns}/policy/effective:
+    parameters: [{$ref: '#/components/parameters/ns'}]
+    get: {tags: [policy], operationId: getEffectivePolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
+
+  /role-bindings:
+    get: {tags: [access], operationId: listRoleBindings, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/RoleBinding'}}}}}}}}}
+    post: {tags: [access], operationId: createRoleBinding, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RoleBindingCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/RoleBinding'}}}}}}
+  /role-bindings/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    delete: {tags: [access], operationId: deleteRoleBinding, responses: {'204': {description: Deleted}}}
+  /tokens:
+    get: {tags: [access], operationId: listTokens, description: 'Configured static tokens (C8_TOKENS), metadata only. No create/revoke in v1.', responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Token'}}}}}}}}}
+
+  /audit:
+    get:
+      tags: [audit]
+      operationId: queryAudit
+      parameters:
+        - {name: namespace, in: query, schema: {type: string}}
+        - {name: action, in: query, schema: {type: string}}
+        - {name: target_id, in: query, schema: {type: string}}
+        - {name: actor_id, in: query, schema: {type: string}}
+        - {name: grant_id, in: query, schema: {type: string}}
+        - {name: since, in: query, schema: {type: string, format: date-time}}
+        - {name: until, in: query, schema: {type: string, format: date-time}}
+        - {$ref: '#/components/parameters/limit'}
+        - {$ref: '#/components/parameters/cursor'}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AuditList'}}}}}
+
+  # ---- Docker track (later, 04) ----
+  /namespaces/{ns}/stacks/{stack}/parachute:
+    x-milestone: docker
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    get: {tags: [parachute], operationId: getStackParachute, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/StackParachute'}}}}}}
+  /namespaces/{ns}/stacks/{stack}/parachute/approve:
+    x-milestone: docker
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    post:
+      tags: [parachute]
+      operationId: approveParachuteHold
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [service], additionalProperties: false, properties: {service: {type: string}}}}}}
+      responses:
+        '202': {description: Held digest approved, content: {application/json: {schema: {type: object, properties: {digest: {type: string}}}}}}
+        '200': {description: Freeze released, content: {application/json: {schema: {type: object, properties: {transactions: {type: array, items: {type: string}}}}}}}
+        '404': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /namespaces/{ns}/stacks/{stack}/parachute/release:
+    x-milestone: docker
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    post: {tags: [parachute], operationId: releaseParachuteFreeze, responses: {'200': {description: Released, content: {application/json: {schema: {type: object, properties: {transactions: {type: array, items: {type: string}}}}}}}, '404': {$ref: '#/components/responses/Problem'}, '503': {$ref: '#/components/responses/Problem'}}}
+  /parachute/status:
+    x-milestone: docker
+    get: {tags: [parachute], operationId: getParachuteStatus, responses: {'200': {description: Last polled parachute.status/v1 document (filtered), content: {application/json: {schema: {type: object}}}}}}
+  /parachute/cycles:
+    x-milestone: docker
+    post: {tags: [parachute], operationId: triggerParachuteCycle, responses: {'202': {description: Started, content: {application/json: {schema: {$ref: '#/components/schemas/CycleJob'}}}}, '409': {$ref: '#/components/responses/Problem'}, '503': {$ref: '#/components/responses/Problem'}}}
+  /parachute/cycles/{id}:
+    x-milestone: docker
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [parachute], operationId: getParachuteCycle, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/CycleJob'}}}}}}
+
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, description: 'API token c8_...'}
+    session: {type: apiKey, in: cookie, name: c8_session, description: 'Browser session; non-GET needs X-CSRF-Token header'}
+  parameters:
+    ns: {name: ns, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}
+    stack: {name: stack, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}
+    id: {name: id, in: path, required: true, schema: {type: string}}
+    limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+    cursor: {name: cursor, in: query, schema: {type: string}}
+  responses:
+    Problem:
+      description: Error
+      content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}
+  schemas:
+    Slug: {type: string, pattern: '^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$'}
+    Runtime: {type: string, enum: [kubernetes, docker], description: 'docker = later track'}
+    EnvironmentTier: {type: string, enum: [prod, non-prod]}
+    SafetyProfile: {type: string, enum: [managed_rollout, as_is, parachute], description: 'managed_rollout = kubernetes health wait + auto rollback; as_is = no safety net (both runtimes); parachute = With Parachute (docker, later)'}
+    Role: {type: string, enum: [viewer, operator, admin, global_admin]}
+    GrantStatus: {type: string, enum: [requested, approved, denied, active, expired, revoked]}
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        code: {type: string}
+        violations: {type: array, items: {$ref: '#/components/schemas/Violation'}}
+        scope: {type: object, description: 'grant_required only', properties: {target: {type: string}, namespace: {type: string}}}
+    Violation: {type: object, required: [rule, message], properties: {rule: {type: string}, service: {type: [string, 'null'], description: 'Kind/name or compose service'}, message: {type: string}}}
+    Principal:
+      type: object
+      properties:
+        id: {type: string}
+        display_name: {type: string}
+        auth_method: {type: string, enum: [oidc, break_glass, token]}
+        global_admin: {type: boolean}
+        csrf_token: {type: [string, 'null'], description: 'Cookie sessions only; send as X-CSRF-Token on mutations'}
+        approver_for: {type: array, items: {type: string}, description: 'Namespace slugs whose approver_group the user is in'}
+        namespaces: {type: array, items: {type: object, properties: {slug: {type: string}, role: {$ref: '#/components/schemas/Role'}}}}
+        active_grants: {type: array, items: {$ref: '#/components/schemas/AccessGrant'}}
+    Target:
+      type: object
+      required: [name, kind, environment_tier]
+      properties:
+        id: {type: string}
+        name: {$ref: '#/components/schemas/Slug'}
+        kind: {$ref: '#/components/schemas/Runtime'}
+        environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        kube_auth: {type: [string, 'null'], enum: [in_cluster, kubeconfig, null]}
+        kubeconfig_env: {type: [string, 'null'], description: 'Name of the Secret-injected env var; content never returned'}
+        kubeconfig_path: {type: [string, 'null'], description: 'Path of a mounted file; content never returned'}
+        kube_context: {type: [string, 'null']}
+        server_version: {type: [string, 'null']}
+        reachable: {type: boolean}
+        sync: {type: string, enum: [syncing, watching, polling, down]}
+        last_error: {type: [string, 'null']}
+        last_seen_at: {type: [string, 'null'], format: date-time}
+        parachute: {type: [object, 'null'], description: 'docker track only', properties: {configured: {type: boolean}, reachable: {type: boolean}, armed: {type: [boolean, 'null']}, polled_at: {type: [string, 'null']}}}
+    TargetList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Target'}}}}
+    Namespace: {type: object, properties: {id: {type: string}, slug: {$ref: '#/components/schemas/Slug'}, display_name: {type: string}, environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}, approver_group: {type: [string, 'null'], description: 'OIDC group of the owning product; its members approve grants'}, description: {type: [string, 'null']}, created_at: {type: string, format: date-time}}}
+    NamespaceCreate: {type: object, required: [slug, display_name, environment_tier], additionalProperties: false, description: 'approver_group required when environment_tier=prod', properties: {slug: {$ref: '#/components/schemas/Slug'}, display_name: {type: string}, environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}, approver_group: {type: string}, description: {type: string}}}
+    NamespaceUpdate: {type: object, additionalProperties: false, properties: {display_name: {type: string}, description: {type: string}, environment_tier: {$ref: '#/components/schemas/EnvironmentTier', description: global_admin only}, approver_group: {type: string, description: global_admin only}}}
+    NamespaceList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Namespace'}}, next_cursor: {type: [string, 'null']}}}
+    Asset:
+      type: object
+      properties:
+        id: {type: string}
+        namespace: {type: string}
+        slug: {$ref: '#/components/schemas/Slug'}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        owner: {type: [string, 'null']}
+        image_repo: {type: [string, 'null']}
+        managed_by: {type: string, enum: [control8, argo]}
+        external_url: {type: [string, 'null']}
+    AssetCreate: {type: object, required: [slug, name], additionalProperties: false, properties: {slug: {$ref: '#/components/schemas/Slug'}, name: {type: string}, description: {type: string}, owner: {type: string}, image_repo: {type: string}, managed_by: {type: string, enum: [control8, argo], default: control8}, external_url: {type: string, format: uri}}}
+    AssetUpdate: {type: object, additionalProperties: false, properties: {name: {type: string}, description: {type: string}, owner: {type: string}, image_repo: {type: string}, external_url: {type: string, format: uri}}}
+    AssetList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Asset'}}, next_cursor: {type: [string, 'null']}}}
+    StackCreate: {type: object, required: [slug, asset, target], additionalProperties: false, properties: {slug: {$ref: '#/components/schemas/Slug'}, asset: {$ref: '#/components/schemas/Slug'}, target: {$ref: '#/components/schemas/Slug'}, runtime: {$ref: '#/components/schemas/Runtime', description: 'Defaults to target kind; mismatch = 400'}}}
+    Stack:
+      type: object
+      required: [id, slug, runtime, environment_tier, state, safety_profile]
+      properties:
+        id: {type: string}
+        namespace: {type: string}
+        slug: {type: string}
+        asset: {type: string}
+        target: {type: string}
+        runtime: {$ref: '#/components/schemas/Runtime'}
+        environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        k8s_namespace: {type: [string, 'null']}
+        compose_project: {type: [string, 'null'], description: docker only}
+        state: {type: string, enum: [draft, active, failed, removed]}
+        safety_profile: {oneOf: [{$ref: '#/components/schemas/SafetyProfile'}, {type: 'null'}]}
+        desired_revision: {type: [integer, 'null']}
+        health: {type: string, enum: [healthy, progressing, degraded, drifted, frozen, unknown]}
+        rollout_frozen: {type: boolean}
+        drift: {type: array, items: {$ref: '#/components/schemas/DriftItem'}}
+        digest_status: {type: [object, 'null'], properties: {checked_at: {type: [string, 'null']}, error: {type: [string, 'null']}, updates: {type: array, items: {type: object, properties: {workload: {type: string}, container: {type: string}, current: {type: [string, 'null']}, available: {type: string}}}}}}
+        parachute: {oneOf: [{$ref: '#/components/schemas/StackParachute'}, {type: 'null'}], description: docker only}
+        services: {type: array, items: {$ref: '#/components/schemas/Service'}}
+    StackList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Stack'}}, next_cursor: {type: [string, 'null']}}}
+    DriftItem: {type: object, required: [kind, message], properties: {kind: {type: string, enum: [service_missing, service_extra, image_mismatch, label_mismatch, parachute_drift]}, service: {type: [string, 'null']}, expected: {type: [string, 'null']}, actual: {type: [string, 'null']}, message: {type: string}}}
+    Service:
+      type: object
+      properties:
+        name: {type: string, description: 'Kind/name on kubernetes'}
+        kind: {type: [string, 'null']}
+        desired_replicas: {type: integer}
+        ready_replicas: {type: integer}
+        state: {type: string, enum: [running, progressing, degraded, restarting, exited, missing]}
+        health: {type: string, enum: [healthy, unhealthy, starting, none]}
+        image_ref: {type: [string, 'null']}
+        image_id: {type: [string, 'null']}
+        is_database: {type: boolean}
+        containers: {type: array, items: {type: object, properties: {name: {type: string}, image: {type: string}}}}
+        parachute: {oneOf: [{$ref: '#/components/schemas/ServiceParachute'}, {type: 'null'}], description: docker only}
+    ServiceParachute:
+      type: object
+      properties:
+        update_available: {type: boolean}
+        candidate_digest: {type: [string, 'null']}
+        hold: {type: [object, 'null'], properties: {reason: {type: string}, until: {type: [string, 'null']}}}
+        last_transaction: {type: [object, 'null'], properties: {id: {type: string}, state: {type: string}, result: {type: [string, 'null']}, reason: {type: [string, 'null']}, time: {type: string}}}
+        drift: {}
+    StackParachute:
+      type: object
+      properties:
+        polled_at: {type: [string, 'null'], format: date-time}
+        stale: {type: boolean}
+        armed: {type: [boolean, 'null']}
+        frozen: {type: array, items: {type: object, properties: {transaction: {type: string}, snapshot: {type: string}, containers: {type: array, items: {type: string}}}}}
+        last_backup: {type: [object, 'null']}
+        last_restore_verification: {type: [object, 'null']}
+    SecretRef: {type: object, required: [name, service, host_path, target], additionalProperties: false, properties: {name: {type: string}, service: {type: string}, host_path: {type: string}, target: {type: string}}}
+    RevisionCreate:
+      type: object
+      required: [safety_profile]
+      additionalProperties: false
+      description: Exactly one of manifests (kubernetes) or compose (docker), matching the stack runtime.
+      properties:
+        safety_profile: {$ref: '#/components/schemas/SafetyProfile'}
+        manifests: {type: string, description: 'Multi-document Kubernetes YAML (K8S-020)'}
+        rollout_timeout_seconds: {type: integer, minimum: 30, maximum: 1800}
+        digest_poll: {type: boolean, default: false, description: managed_rollout only}
+        database_services: {type: array, items: {type: string}}
+        compose: {type: string, description: 'docker track: Compose YAML'}
+        backup_mode: {type: string, enum: [stop, live, none], default: stop, description: docker track}
+        env: {type: object, additionalProperties: {type: string}, description: docker track}
+        secret_refs: {type: array, items: {$ref: '#/components/schemas/SecretRef'}, description: docker track}
+        service_options: {type: object, additionalProperties: {type: object, additionalProperties: {type: string}}, description: docker track}
+    Revision:
+      type: object
+      properties:
+        id: {type: string}
+        number: {type: integer}
+        runtime: {$ref: '#/components/schemas/Runtime'}
+        safety_profile: {$ref: '#/components/schemas/SafetyProfile'}
+        origin: {type: string, enum: [user, image_update]}
+        base_revision: {type: [integer, 'null']}
+        manifests_input: {type: [string, 'null']}
+        compose_input: {type: [string, 'null']}
+        rendered: {description: 'Object list (kubernetes) or compose JSON (docker)'}
+        inventory: {type: array, items: {type: object, properties: {group: {type: string}, kind: {type: string}, name: {type: string}}}}
+        rollout_timeout_seconds: {type: [integer, 'null']}
+        digest_poll: {type: boolean}
+        database_services: {type: array, items: {type: string}}
+        policy_result: {$ref: '#/components/schemas/PolicyResult'}
+        created_by: {type: string}
+        created_at: {type: string, format: date-time}
+    RevisionList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Revision'}}, next_cursor: {type: [string, 'null']}}}
+    PolicyResult: {type: object, properties: {allowed: {type: boolean}, requires_approval: {type: boolean}, violations: {type: array, items: {$ref: '#/components/schemas/Violation'}}, approval_reasons: {type: array, items: {type: string}}}}
+    DeploymentCreate:
+      type: object
+      required: [revision, confirm_safety_profile, confirm_environment_tier]
+      additionalProperties: false
+      properties:
+        revision: {type: integer, minimum: 1}
+        confirm_safety_profile: {$ref: '#/components/schemas/SafetyProfile'}
+        confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        reason: {type: string}
+        repull: {type: boolean, default: false, description: 'docker as_is only'}
+    ImageUpdateCreate:
+      type: object
+      required: [workload, container, image, reason, confirm_environment_tier]
+      additionalProperties: false
+      properties:
+        workload: {type: string, description: 'Kind/name, e.g. Deployment/web'}
+        container: {type: string}
+        image: {type: string, description: 'Same repository; new tag and/or @sha256 digest'}
+        reason: {type: string, minLength: 1}
+        confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
+    RolloutStatus:
+      type: object
+      properties:
+        state: {type: string, enum: [pending, waiting, rolling_back, done]}
+        result: {type: [string, 'null'], enum: [healthy, failed, rolled_back, rollback_failed, null]}
+        timeout_seconds: {type: integer}
+        rolled_back_to: {type: [integer, 'null']}
+        workloads: {type: array, items: {type: object, properties: {kind: {type: string}, name: {type: string}, desired: {type: integer}, updated: {type: integer}, ready: {type: integer}, available: {type: integer}, reason: {type: [string, 'null']}}}}
+    Deployment:
+      type: object
+      required: [id, action, status, runtime, safety_profile, environment_tier]
+      properties:
+        id: {type: string}
+        namespace: {type: string}
+        stack: {type: string}
+        action: {type: string, enum: [apply, teardown]}
+        trigger: {type: string, enum: [manual, image_update, digest_poll]}
+        revision: {type: [integer, 'null']}
+        runtime: {$ref: '#/components/schemas/Runtime'}
+        safety_profile: {oneOf: [{$ref: '#/components/schemas/SafetyProfile'}, {type: 'null'}]}
+        environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        status: {type: string, enum: [pending_approval, queued, running, succeeded, failed, rejected, cancelled]}
+        requested_by: {type: string}
+        approved_by: {type: [string, 'null']}
+        grant_id: {type: [string, 'null']}
+        grant_bypass: {type: [string, 'null'], enum: [break_glass, null]}
+        reason: {type: [string, 'null']}
+        rollout: {oneOf: [{$ref: '#/components/schemas/RolloutStatus'}, {type: 'null'}]}
+        started_at: {type: [string, 'null'], format: date-time}
+        finished_at: {type: [string, 'null'], format: date-time}
+        error: {type: [string, 'null']}
+        output: {type: [string, 'null']}
+    DeploymentList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Deployment'}}, next_cursor: {type: [string, 'null']}}}
+    AccessGrantCreate:
+      type: object
+      required: [target, namespace, reason, duration_minutes]
+      additionalProperties: false
+      properties:
+        target: {$ref: '#/components/schemas/Slug'}
+        namespace: {$ref: '#/components/schemas/Slug'}
+        reason: {type: string, minLength: 10, maxLength: 500}
+        ticket_ref: {type: string, maxLength: 100}
+        duration_minutes: {type: integer, minimum: 15, maximum: 1440, description: 'Capped by C8_GRANT_MAX'}
+        starts_at: {type: string, format: date-time, description: 'Optional, at most 7 days ahead'}
+    AccessGrant:
+      type: object
+      properties:
+        id: {type: string}
+        requester: {type: string}
+        target: {type: string}
+        namespace: {type: string}
+        environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        reason: {type: string}
+        ticket_ref: {type: [string, 'null']}
+        duration_minutes: {type: integer}
+        status: {$ref: '#/components/schemas/GrantStatus'}
+        starts_at: {type: [string, 'null'], format: date-time}
+        expires_at: {type: [string, 'null'], format: date-time}
+        approver_group: {type: string}
+        approver: {type: [string, 'null']}
+        decided_at: {type: [string, 'null'], format: date-time}
+        decision_note: {type: [string, 'null']}
+        revoked_by: {type: [string, 'null']}
+        revoked_at: {type: [string, 'null'], format: date-time}
+        revoke_reason: {type: [string, 'null']}
+        created_at: {type: string, format: date-time}
+    AccessGrantList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/AccessGrant'}}, next_cursor: {type: [string, 'null']}}}
+    CycleJob: {type: object, properties: {id: {type: string}, status: {type: string, enum: [running, succeeded, failed, conflict]}, started_at: {type: string}, finished_at: {type: [string, 'null']}, result: {type: [object, 'null']}, error: {type: [string, 'null']}}}
+    PolicyRules:
+      type: object
+      additionalProperties: false
+      properties:
+        allowed_registries: {type: array, items: {type: string}, description: 'Prefixes like ghcr.io/acme/; empty = any'}
+        allowed_k8s_namespaces: {type: array, items: {type: string}, description: 'Names or prefix* globs; empty = any except kube-* and default'}
+        required_labels: {type: array, items: {type: string}}
+        protected_db_approval: {type: boolean}
+        allowed_safety_profiles: {type: array, items: {$ref: '#/components/schemas/SafetyProfile'}}
+        allowed_bind_prefixes: {type: array, items: {type: string}, description: 'Allowed hostPath / bind prefixes; empty = none'}
+        allow_privileged: {type: boolean}
+    RoleBinding: {type: object, properties: {id: {type: string}, idp_group: {type: string}, namespace: {type: [string, 'null']}, role: {$ref: '#/components/schemas/Role'}}}
+    RoleBindingCreate: {type: object, required: [idp_group, role], additionalProperties: false, properties: {idp_group: {type: string}, namespace: {type: [string, 'null']}, role: {$ref: '#/components/schemas/Role'}}}
+    Token: {type: object, description: 'From C8_TOKENS; hash never returned', properties: {id: {type: string}, name: {type: string}, owner_sub: {type: string}, owner_resolved: {type: boolean}, namespace: {type: [string, 'null']}, role: {$ref: '#/components/schemas/Role'}, expires_at: {type: string}, last_used_at: {type: [string, 'null']}, revoked_at: {type: [string, 'null']}}}
+    AuditEvent:
+      type: object
+      properties:
+        id: {type: integer}
+        at: {type: string, format: date-time}
+        actor_type: {type: string, enum: [user, token, system, parachute]}
+        actor_id: {type: [string, 'null']}
+        actor_display: {type: [string, 'null']}
+        auth_method: {type: [string, 'null']}
+        namespace: {type: [string, 'null']}
+        action: {type: string}
+        target_type: {type: [string, 'null']}
+        target_id: {type: [string, 'null']}
+        outcome: {type: string, enum: [success, denied, failed]}
+        details: {type: object, description: 'Prod-gated actions include grant_id or grant_bypass'}
+        request_id: {type: [string, 'null']}
+    EventType: {type: string, enum: [stack.updated, stack.removed, revision.created, deployment.updated, access_grant.updated, audit.created, target.status, reset, session.ended]}
+    Event:
+      type: object
+      required: [type, at, data]
+      properties:
+        type: {$ref: '#/components/schemas/EventType'}
+        at: {type: string, format: date-time}
+        namespace: {type: [string, 'null']}
+        data:
+          description: 'Payload by type (10 catalogue)'
+          oneOf:
+            - {$ref: '#/components/schemas/Stack'}
+            - {$ref: '#/components/schemas/Revision'}
+            - {$ref: '#/components/schemas/Deployment'}
+            - {$ref: '#/components/schemas/AccessGrant'}
+            - {$ref: '#/components/schemas/AuditEvent'}
+            - {$ref: '#/components/schemas/Target'}
+            - {type: object, description: 'stack.removed', required: [namespace, slug], properties: {namespace: {type: string}, slug: {type: string}}}
+            - {type: object, description: 'reset / session.ended', required: [reason], properties: {reason: {type: string}}}
+    AuditList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/AuditEvent'}}, next_cursor: {type: [string, 'null']}}}

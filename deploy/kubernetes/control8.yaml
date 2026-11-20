@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata: {name: control8}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: control8, namespace: control8}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: control8-config, namespace: control8}
+data:
+  C8_PUBLIC_URL: http://localhost:8000
+---
+apiVersion: v1
+kind: Secret
+metadata: {name: control8-secrets, namespace: control8}
+type: Opaque
+stringData: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: control8-data, namespace: control8}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: control8, namespace: control8}
+spec:
+  selector: {app: control8}
+  ports: [{port: 8000, targetPort: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: control8, namespace: control8}
+spec:
+  replicas: 1                                      # ARC-014
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: control8}}
+  template:
+    metadata: {labels: {app: control8}}
+    spec:
+      serviceAccountName: control8
+      securityContext: {runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, runAsNonRoot: true}
+      containers:
+        - name: control8
+          image: ghcr.io/kazzyapi/control-8:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: control8-config}
+            - secretRef: {name: control8-secrets}
+          ports: [{containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /readyz, port: 8000}}
+          livenessProbe: {httpGet: {path: /healthz, port: 8000}}
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: data, mountPath: /var/lib/control8}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: control8-data}}]
