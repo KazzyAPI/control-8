@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -31,7 +32,7 @@ func TestKindM7_APIApplyEvents(t *testing.T) {
 	m := newM7(t)
 	m.s.drivers = func(string) (rt.Driver, error) { return k8s.NewDriver(dyn), nil }
 	t.Cleanup(func() {
-		dyn.Resource(schema.GroupVersionResource{Version: "v1", Resource: "namespaces"}).Delete(context.Background(), "a", metav1.DeleteOptions{})
+		delNS(dyn)
 	})
 	m.revision(cm)
 	sub, _, _ := m.s.bus.Subscribe(nil)
@@ -49,5 +50,18 @@ func TestKindM7_APIApplyEvents(t *testing.T) {
 	}
 	if strings.Join(seq, ",") != "queued,running,succeeded" {
 		t.Fatalf("events %v", seq)
+	}
+}
+
+// delNS deletes ns "a" and waits until it is gone: a Terminating namespace rejects creates as Forbidden,
+// which broke the next kind test that reused "a".
+func delNS(dyn dynamic.Interface) {
+	r := dyn.Resource(schema.GroupVersionResource{Version: "v1", Resource: "namespaces"})
+	r.Delete(context.Background(), "a", metav1.DeleteOptions{})
+	for i := 0; i < 120; i++ {
+		if _, err := r.Get(context.Background(), "a", metav1.GetOptions{}); err != nil {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }

@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/crane"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -55,7 +53,7 @@ func TestKindM12_DigestPoll(t *testing.T) {
 	}
 	m.eng.SetCache("home", c)
 	t.Cleanup(func() {
-		dyn.Resource(schema.GroupVersionResource{Version: "v1", Resource: "namespaces"}).Delete(context.Background(), "a", metav1.DeleteOptions{})
+		delNS(dyn)
 	})
 	p := &digest.Poller{DB: m.s.db, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Resolve: func(context.Context, string) (string, error) { return newer, nil }}

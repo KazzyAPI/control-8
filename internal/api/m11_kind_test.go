@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -61,7 +59,7 @@ func TestKindM11_ManagedRollout(t *testing.T) {
 	}
 	m.eng.SetCache("home", c)
 	t.Cleanup(func() {
-		dyn.Resource(schema.GroupVersionResource{Version: "v1", Resource: "namespaces"}).Delete(context.Background(), "a", metav1.DeleteOptions{})
+		delNS(dyn)
 	})
 	m.revisionWith(strings.Replace(web3, "image: busybox", "image: registry.k8s.io/pause:3.9", 1), "managed_rollout")
 	m.revisionWith(strings.Replace(web3, "image: busybox", "image: registry.k8s.io/pause:3.9", 1), "managed_rollout") // rev 2 = same, used to re-deploy as admin
