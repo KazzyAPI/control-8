@@ -118,12 +118,11 @@ paths:
         '422': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
   /namespaces/{ns}/stacks/{stack}/image-updates:
-    x-milestone: M11
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     post:
       tags: [deployments]
       operationId: requestImageUpdate
-      description: kubernetes + managed_rollout + active stacks only (K8S-050). Creates revision N+1 and a deployment.
+      description: kubernetes + managed_rollout + active stacks only (K8S-050). Creates revision N+1 and a deployment. 409 image_update_not_allowed / rollout_frozen, 400 image_repo_change, 422 policy_violation, 403 grant_required.
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ImageUpdateCreate'}}}}
       responses:
         '202': {description: Accepted, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}
@@ -131,6 +130,8 @@ paths:
         '403': {$ref: '#/components/responses/Problem'}
         '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
   /namespaces/{ns}/stacks/{stack}/services:
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: listServices, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Service'}}}}}}}}}

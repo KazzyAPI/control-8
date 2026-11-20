@@ -26,6 +26,7 @@ func (s *server) depRoutes(reg func(string, http.HandlerFunc)) {
 	const d = "/api/v1/namespaces/{ns}/stacks/{stack}/deployments"
 	reg("GET "+d, s.api(s.listDeployments))
 	reg("POST "+d, s.api(s.requestDeployment))
+	reg("POST /api/v1/namespaces/{ns}/stacks/{stack}/image-updates", s.api(s.requestImageUpdate))
 	reg("GET /api/v1/deployments/{id}", s.api(s.getDeployment))
 	reg("POST /api/v1/deployments/{id}/approve", s.api(s.approveDeployment))
 	reg("POST /api/v1/deployments/{id}/reject", s.api(s.rejectDeployment))
@@ -174,7 +175,7 @@ func (s *server) reachable(target string) bool {
 }
 
 // enqueue inserts the deployment (DOM-001 is enforced by the unique index) and answers 202.
-func (s *server) enqueue(w http.ResponseWriter, r *http.Request, p *auth.Principal, x stackRec, gr grantRef, action string, revID *string, reason string, approval bool) {
+func (s *server) enqueue(w http.ResponseWriter, r *http.Request, p *auth.Principal, x stackRec, gr grantRef, action, trigger string, revID *string, reason string, approval bool) {
 	status := "queued"
 	if approval {
 		status = "pending_approval"
@@ -184,8 +185,8 @@ func (s *server) enqueue(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	if reason != "" {
 		rs = reason
 	}
-	if _, err := s.db.Exec(`INSERT INTO deployment(id,stack_id,revision_id,action,status,requested_by,reason,grant_id,grant_bypass,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-		id, x.ID, revID, action, status, p.ID, rs, nz(gr.ID), nz(gr.Bypass), now, now); err != nil {
+	if _, err := s.db.Exec(`INSERT INTO deployment(id,stack_id,revision_id,action,trigger,status,requested_by,reason,grant_id,grant_bypass,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		id, x.ID, revID, action, trigger, status, p.ID, rs, nz(gr.ID), nz(gr.Bypass), now, now); err != nil {
 		s.auditNS(r, p, x.NS, "deployment.request", "stack", x.ID, "failed", gr.details(map[string]any{"reason": "deployment_in_progress"}))
 		problem(w, 409, "deployment_in_progress", "the stack already has a queued or running deployment")
 		return
@@ -203,6 +204,10 @@ func (s *server) enqueue(w http.ResponseWriter, r *http.Request, p *auth.Princip
 func (s *server) requestDeployment(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	x, ok := s.loadStack(w, r, p, "operator", "deployment.request")
 	if !ok {
+		return
+	}
+	if x.Frozen && authz.Require(s.db, p, x.NS, "admin") != nil { // K8S-055: only an admin's deploy clears the freeze
+		problem(w, 409, "rollout_frozen", "rollout is frozen after a failed rollback; an admin must deploy")
 		return
 	}
 	var in struct {
@@ -254,7 +259,7 @@ func (s *server) requestDeployment(w http.ResponseWriter, r *http.Request, p *au
 		problem(w, 422, "policy_violation", "revision violates policy: "+strings.Join(rules, ", "))
 		return
 	}
-	s.enqueue(w, r, p, x, gr, "apply", &revID, in.Reason, res.RequiresApproval)
+	s.enqueue(w, r, p, x, gr, "apply", "manual", &revID, in.Reason, res.RequiresApproval)
 }
 
 // teardown is DELETE on a deployed stack: reason required, POL-R10 sends database stacks to approval.
@@ -288,7 +293,7 @@ func (s *server) teardown(w http.ResponseWriter, r *http.Request, p *auth.Princi
 	}
 	var dbl []string
 	json.Unmarshal([]byte(dbs), &dbl)
-	s.enqueue(w, r, p, x, gr, "teardown", nil, in.Reason, rules.ProtectedDBApproval && len(dbl) > 0)
+	s.enqueue(w, r, p, x, gr, "teardown", "manual", nil, in.Reason, rules.ProtectedDBApproval && len(dbl) > 0)
 }
 
 func (s *server) approveDeployment(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
@@ -452,7 +457,7 @@ func (s *server) execute(id string) {
 		json.Unmarshal([]byte(raw), &rend)
 	}
 	var out string
-	wrote := false
+	wrote, rb := false, ""
 	runErr := func() error {
 		if s.drivers == nil {
 			return &rt.Error{Code: "target_unreachable", Detail: "no driver for target"}
@@ -478,17 +483,26 @@ func (s *server) execute(id string) {
 		if out, err = drv.Apply(ctx, plan); err != nil {
 			return err
 		}
-		if err := s.waitHealthy(ctx, d, x, rend, number, timeout); err != nil { // 08 apply step 4; failure leaves the cluster as is
+		// K8S-053: a managed_rollout revision with a predecessor rolls back on an unhealthy rollout.
+		managed := profile == "managed_rollout" && x.Desired != nil && *x.Desired != number
+		mode := rbNone
+		if managed {
+			mode = rbMay
+		}
+		if err := s.waitHealthy(ctx, d, x, rend, number, timeout, mode); err != nil { // 08 apply step 4
+			if managed {
+				rb = s.rollback(ctx, drv, d, x, stack, *x.Desired, timeout, &out)
+			}
 			return err
 		}
 		pruned, err := drv.Prune(ctx, plan)
 		out += pruned
 		return err
 	}()
-	s.finish(d, x, number, profile, out, runErr, wrote)
+	s.finish(d, x, number, profile, out, runErr, wrote, rb)
 }
 
-func (s *server) finish(d depRec, x stackRec, number int, profile, out string, runErr error, wrote bool) {
+func (s *server) finish(d depRec, x stackRec, number int, profile, out string, runErr error, wrote bool, rb string) {
 	if len(out) > 64<<10 {
 		out = out[len(out)-64<<10:]
 	}
@@ -501,13 +515,24 @@ func (s *server) finish(d depRec, x stackRec, number int, profile, out string, r
 		if e, ok := runErr.(*rt.Error); ok {
 			details["error"] = e.Code
 		}
+		if rb != "" {
+			details["rollback"] = rb
+		}
 	}
 	s.db.Exec(`UPDATE deployment SET status=?,finished_at=?,output=?,error=?,updated_at=? WHERE id=?`, status, now, out, errText, now, d.ID)
 	switch {
 	case runErr == nil && d.Action == "teardown":
 		s.db.Exec(`UPDATE stack SET state='removed',updated_at=? WHERE id=?`, now, x.ID)
 	case runErr == nil:
-		s.db.Exec(`UPDATE stack SET state='active',desired_revision=?,safety_profile=?,updated_at=? WHERE id=?`, number, profile, now, x.ID)
+		s.db.Exec(`UPDATE stack SET state='active',desired_revision=?,safety_profile=?,rollout_frozen=0,updated_at=? WHERE id=?`, number, profile, now, x.ID)
+		if x.Frozen {
+			s.auditSystem(d.NS, "stack.rollout_unfrozen", "stack", x.ID, "success", map[string]any{"stack": x.Slug, "deployment": d.ID})
+		}
+	case rb == "rolled_back": // K8S-055: desired_revision stays at the previous number
+		s.db.Exec(`UPDATE stack SET state='active',updated_at=? WHERE id=?`, now, x.ID)
+	case rb == "rollback_failed":
+		s.db.Exec(`UPDATE stack SET state='failed',rollout_frozen=1,updated_at=? WHERE id=?`, now, x.ID)
+		s.auditSystem(d.NS, "stack.rollout_frozen", "stack", x.ID, "success", map[string]any{"stack": x.Slug, "deployment": d.ID})
 	case wrote && d.Action == "apply": // partially applied: as_is leaves the cluster as it is (08)
 		s.db.Exec(`UPDATE stack SET state='failed',updated_at=? WHERE id=?`, now, x.ID)
 	}
@@ -519,8 +544,30 @@ func (s *server) finish(d depRec, x stackRec, number int, profile, out string, r
 	if nx, err := scanStack(s.db.QueryRow(stackSel+`WHERE st.id=?`, x.ID)); err == nil {
 		if nx.State == "removed" {
 			s.publish(events.Event{Type: "stack.removed", At: s.now(), Namespace: nx.NS, Data: map[string]string{"namespace": nx.NS, "slug": nx.Slug}})
-		} else if runErr == nil || nx.State != x.State {
+		} else if runErr == nil || nx.State != x.State || rb != "" {
 			s.publishStack(nx)
 		}
 	}
+}
+
+// rollback re-applies the previous desired revision's rendered objects, waits for health with the same timeout
+// and prunes to its inventory (K8S-054). PVCs are never touched (Prune keeps them, D-37).
+func (s *server) rollback(ctx context.Context, drv rt.Driver, d depRec, x stackRec, stack rt.Stack, prev, timeout int, out *string) string {
+	var raw string
+	var rend []map[string]any
+	s.db.QueryRow(`SELECT rendered FROM revision WHERE stack_id=? AND number=?`, x.ID, prev).Scan(&raw)
+	json.Unmarshal([]byte(raw), &rend)
+	plan := rt.Plan{Stack: stack, Objects: rend}
+	o, err := drv.Apply(ctx, plan)
+	*out += "\n-- rollback to revision " + strconv.Itoa(prev) + " --\n" + o
+	if err != nil {
+		s.rollbackDone(d, x, rolloutState{Timeout: timeout, Workloads: []map[string]any{}}, prev, false)
+		return "rollback_failed"
+	}
+	if s.waitHealthy(ctx, d, x, rend, prev, timeout, rbRun) != nil {
+		return "rollback_failed"
+	}
+	pruned, _ := drv.Prune(ctx, plan)
+	*out += pruned
+	return "rolled_back"
 }

@@ -20,15 +20,19 @@ type fakeDriver struct {
 	mu                        sync.Mutex
 	calls                     []string
 	precheck, apply, teardown error
-	gate                      chan struct{} // Apply blocks until closed
+	gate                      chan struct{}       // Apply blocks until closed
+	hook                      func(rt.Plan) error // M11: scripted Apply outcome, overrides apply
 }
 
 func (f *fakeDriver) rec(c string)                            { f.mu.Lock(); f.calls = append(f.calls, c); f.mu.Unlock() }
 func (f *fakeDriver) Precheck(context.Context, rt.Plan) error { f.rec("precheck"); return f.precheck }
-func (f *fakeDriver) Apply(context.Context, rt.Plan) (string, error) {
+func (f *fakeDriver) Apply(_ context.Context, p rt.Plan) (string, error) {
 	f.rec("apply")
 	if f.gate != nil {
 		<-f.gate
+	}
+	if f.hook != nil {
+		return "applied\n", f.hook(p)
 	}
 	return "applied\n", f.apply
 }

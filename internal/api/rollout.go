@@ -38,10 +38,30 @@ func workloadJSON(ws []k8s.WorkloadHealth) []map[string]any {
 	return out
 }
 
+// rbMode says what a health wait guards: a plain apply, one that rolls back on failure (K8S-053), or the rollback itself.
+type rbMode int
+
+const (
+	rbNone rbMode = iota
+	rbMay
+	rbRun
+)
+
+// rollbackDone records the end of a rollback (K8S-054/055): rollout result and the rollout.rollback audit.
+func (s *server) rollbackDone(d depRec, x stackRec, ro rolloutState, prev int, ok bool) {
+	res, outcome := "rolled_back", "success"
+	if !ok {
+		res, outcome = "rollback_failed", "failed"
+	}
+	ro.State, ro.Result, ro.RolledBackTo = "done", &res, &prev
+	s.setRollout(d.ID, ro)
+	s.auditSys(d.NS, "rollout.rollback", d.ID, outcome, map[string]any{"stack": x.Slug, "rolled_back_to": prev, "result": res})
+}
+
 // waitHealthy evaluates rollout health on every informer change of the stack plus a 5 s safety tick (K8S-063)
 // until healthy, immediately unhealthy, or the revision's rollout timeout. Without informers (no inventory
 // engine) there is nothing to observe and the wait is skipped.
-func (s *server) waitHealthy(ctx context.Context, d depRec, x stackRec, plan []map[string]any, rev, timeout int) error {
+func (s *server) waitHealthy(ctx context.Context, d depRec, x stackRec, plan []map[string]any, rev, timeout int, rb rbMode) error {
 	if s.inv == nil {
 		return nil
 	}
@@ -52,8 +72,19 @@ func (s *server) waitHealthy(ctx context.Context, d depRec, x stackRec, plan []m
 	tick, stop := s.tick(5 * time.Second)
 	defer stop()
 	ro, last := rolloutState{State: "waiting", Timeout: timeout}, ""
+	if rb == rbRun {
+		ro.State, ro.RolledBackTo = "rolling_back", &rev
+	}
 	done := func(result, action, outcome string, det map[string]any) {
-		ro.State, ro.Result = "done", &result
+		switch {
+		case rb == rbRun: // rev is the revision rolled back to
+			s.rollbackDone(d, x, ro, rev, result == "healthy")
+			return
+		case rb == rbMay && result == "failed":
+			ro.State, ro.Result = "rolling_back", nil // the executor rolls back next
+		default:
+			ro.State, ro.Result = "done", &result
+		}
 		s.setRollout(d.ID, ro)
 		det["stack"], det["revision"] = x.Slug, rev
 		s.auditSys(d.NS, action, d.ID, outcome, det)
