@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"sort"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -70,3 +71,6 @@ func Migrate(db *sql.DB) error {
 	}
 	return nil
 }
+
+// Ts formats t as the fixed-width UTC string used in every time column (sorts lexicographically).
+func Ts(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }

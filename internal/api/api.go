@@ -10,11 +10,15 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/KazzyAPI/control-8/internal/config"
 )
 
-// New returns the root handler: /healthz, /readyz, request-id + access log (API-007).
-func New(db *sql.DB, log *slog.Logger) http.Handler {
+// New returns the root handler: health, /api/v1, /auth, request-id + access log (API-007).
+func New(db *sql.DB, log *slog.Logger, cfg *config.Config) http.Handler {
 	mux := http.NewServeMux()
+	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}}
+	s.routes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

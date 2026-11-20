@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KazzyAPI/control-8/internal/config"
 	"github.com/KazzyAPI/control-8/internal/store"
 )
 
@@ -18,7 +19,7 @@ func TestHealthReadyRequestID(t *testing.T) { // API-007
 		t.Fatal(err)
 	}
 	var buf bytes.Buffer
-	h := New(db, slog.New(slog.NewJSONHandler(&buf, nil)))
+	h := New(db, slog.New(slog.NewJSONHandler(&buf, nil)), &config.Config{PublicURL: "http://localhost:8000"})
 	for _, p := range []string{"/healthz", "/readyz", "/nope"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))

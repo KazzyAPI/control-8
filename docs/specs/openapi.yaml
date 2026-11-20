@@ -24,6 +24,7 @@ tags:
 
 paths:
   /events:
+    x-milestone: M4
     get:
       tags: [events]
       operationId: getEvents
@@ -40,15 +41,19 @@ paths:
   /me:
     get: {tags: [meta], operationId: getMe, responses: {'200': {description: Principal, content: {application/json: {schema: {$ref: '#/components/schemas/Principal'}}}}}}
   /inventory:
+    x-milestone: M9
     get: {tags: [stacks], operationId: getInventory, responses: {'200': {description: All visible stacks, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
 
   /targets:
+    x-milestone: M5
     get: {tags: [targets], operationId: listTargets, description: 'Read-only; targets are defined in C8_TARGETS (D-49)', responses: {'200': {description: Targets, content: {application/json: {schema: {$ref: '#/components/schemas/TargetList'}}}}}}
   /targets/{target}:
+    x-milestone: M5
     parameters: [{name: target, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
     get: {tags: [targets], operationId: getTarget, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Target'}}}}}}
 
   /namespaces:
+    x-milestone: M2
     get: {tags: [namespaces], operationId: listNamespaces, parameters: [{$ref: '#/components/parameters/limit'}, {$ref: '#/components/parameters/cursor'}], responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceList'}}}}}}
     post:
       tags: [namespaces]
@@ -56,22 +61,26 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceCreate'}}}}
       responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}, '409': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}:
+    x-milestone: M2
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [namespaces], operationId: getNamespace, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}, '404': {$ref: '#/components/responses/Problem'}}}
     patch: {tags: [namespaces], operationId: updateNamespace, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}}}
     delete: {tags: [namespaces], operationId: deleteNamespace, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /namespaces/{ns}/assets:
+    x-milestone: M2
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [assets], operationId: listAssets, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AssetList'}}}}}}
     post: {tags: [assets], operationId: createAsset, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
   /namespaces/{ns}/assets/{asset}:
+    x-milestone: M2
     parameters: [{$ref: '#/components/parameters/ns'}, {name: asset, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
     get: {tags: [assets], operationId: getAsset, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
     patch: {tags: [assets], operationId: updateAsset, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
     delete: {tags: [assets], operationId: deleteAsset, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /namespaces/{ns}/stacks:
+    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [stacks], operationId: listStacks, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
     post:
@@ -80,6 +89,7 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StackCreate'}}}}
       responses: {'201': {description: Draft stack, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}/stacks/{stack}:
+    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: getStack, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}}}
     delete:
@@ -89,6 +99,7 @@ paths:
       requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {reason: {type: string, minLength: 1}, confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}}}}}}
       responses: {'204': {description: Draft deleted}, '202': {description: Teardown deployment, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}/stacks/{stack}/revisions:
+    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: listRevisions, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RevisionList'}}}}}}
     post:
@@ -97,12 +108,15 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RevisionCreate'}}}}
       responses: {'201': {description: Created (may be policy-disallowed), content: {application/json: {schema: {$ref: '#/components/schemas/Revision'}}}}, '400': {$ref: '#/components/responses/Problem'}, '422': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}/stacks/{stack}/revisions/{n}:
+    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}, {name: n, in: path, required: true, schema: {type: integer, minimum: 1}}]
     get: {tags: [stacks], operationId: getRevision, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Revision'}}}}}}
   /namespaces/{ns}/stacks/{stack}/revisions/{n}/diff:
+    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}, {name: n, in: path, required: true, schema: {type: integer}}, {name: against, in: query, required: true, schema: {type: integer}}]
     get: {tags: [stacks], operationId: diffRevision, responses: {'200': {description: Unified diff, content: {text/plain: {schema: {type: string}}}}}}
   /namespaces/{ns}/stacks/{stack}/deployments:
+    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [deployments], operationId: listDeployments, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DeploymentList'}}}}}}
     post:
@@ -118,6 +132,7 @@ paths:
         '422': {$ref: '#/components/responses/Problem'}
         '503': {$ref: '#/components/responses/Problem'}
   /namespaces/{ns}/stacks/{stack}/image-updates:
+    x-milestone: M11
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     post:
       tags: [deployments]
@@ -131,23 +146,29 @@ paths:
         '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
   /namespaces/{ns}/stacks/{stack}/services:
+    x-milestone: M9
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: listServices, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Service'}}}}}}}}}
 
   /deployments/{id}:
+    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     get: {tags: [deployments], operationId: getDeployment, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}}}
   /deployments/{id}/approve:
+    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [deployments], operationId: approveDeployment, responses: {'200': {description: Approved, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
   /deployments/{id}/reject:
+    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [deployments], operationId: rejectDeployment, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string}}}}}}, responses: {'200': {description: Rejected, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}}}
   /deployments/{id}/cancel:
+    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [deployments], operationId: cancelDeployment, responses: {'200': {description: Cancelled, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /access-grants:
+    x-milestone: M8
     get:
       tags: [access-grants]
       operationId: listAccessGrants
@@ -165,11 +186,14 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrantCreate'}}}}
       responses: {'201': {description: Requested, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '400': {$ref: '#/components/responses/Problem'}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /access-grants/mine:
+    x-milestone: M8
     get: {tags: [access-grants], operationId: listMyAccessGrants, responses: {'200': {description: Caller's grants, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrantList'}}}}}}
   /access-grants/{id}:
+    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     get: {tags: [access-grants], operationId: getAccessGrant, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '404': {$ref: '#/components/responses/Problem'}}}
   /access-grants/{id}/approve:
+    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     post:
       tags: [access-grants]
@@ -178,20 +202,25 @@ paths:
       requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {duration_minutes: {type: integer, minimum: 15, description: May only shorten}, note: {type: string, maxLength: 500}}}}}}
       responses: {'200': {description: Approved or active, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /access-grants/{id}/deny:
+    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [access-grants], operationId: denyAccessGrant, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [note], additionalProperties: false, properties: {note: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Denied, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
   /access-grants/{id}/revoke:
+    x-milestone: M8
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [access-grants], operationId: revokeAccessGrant, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], additionalProperties: false, properties: {reason: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Revoked, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /policies/global:
+    x-milestone: M6
     get: {tags: [policy], operationId: getGlobalPolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
     put: {tags: [policy], operationId: putGlobalPolicy, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
   /namespaces/{ns}/policy:
+    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [policy], operationId: getNamespacePolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
     put: {tags: [policy], operationId: putNamespacePolicy, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
   /namespaces/{ns}/policy/effective:
+    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [policy], operationId: getEffectivePolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
 
@@ -205,6 +234,7 @@ paths:
     get: {tags: [access], operationId: listTokens, description: 'Configured static tokens (C8_TOKENS), metadata only. No create/revoke in v1.', responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Token'}}}}}}}}}
 
   /audit:
+    x-milestone: M2
     get:
       tags: [audit]
       operationId: queryAudit

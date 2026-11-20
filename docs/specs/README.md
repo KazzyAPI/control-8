@@ -137,3 +137,8 @@ Later, optional (after v1, roadmap "Docker track"): Docker runtime driver (compo
 | D-57 | API client generated from `openapi.yaml` with `openapi-typescript` + `openapi-fetch`; CI fails if the generated file differs | Parity with the API by construction (UI-001) |
 | D-58 | A stub `web/dist/index.html` is committed so `go build`/`go test` need no Node; the image build always runs the Node stage | Keeps backend milestones and M0 unaffected |
 | D-59 | Event payloads are full REST resource shapes, coalesced to ≤ 1/s per stack/deployment | SPA writes them straight into the query cache; bounded traffic |
+| D-60 | M1: `role_binding.namespace_id` holds the namespace slug (no FK) until the `namespace` table lands in M2; `/me.namespaces` lists only namespaces named in bindings, `approver_for` and `active_grants` are empty until M3/M8 | Smallest reading with no namespace table yet |
+| D-61 | M1: break-glass login is `POST /auth/break-glass {"password"}` → 204 + cookie only (no GET form until the SPA); source IP for AUTH-013 is `RemoteAddr` (no proxy headers) | Smallest reading of the `GET\|POST` route |
+| D-62 | M1: audit rows are written for every state-changing call and every denied call (incl. denied reads and CSRF failures); successful reads are not audited. Token owner (AUTH-032) is resolved live per request, not stored | DOM-009 covers state changes; reads would flood the log |
+| D-63 | `golang.org/x/crypto` pinned at v0.31.0 (argon2), the newest release compatible with `go 1.23` | Later versions force a newer go directive |
+
