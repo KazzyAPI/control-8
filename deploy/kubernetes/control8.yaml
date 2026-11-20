@@ -11,12 +11,19 @@ kind: ConfigMap
 metadata: {name: control8-config, namespace: control8}
 data:
   C8_PUBLIC_URL: http://localhost:8000
+  C8_TARGETS: |
+    [{"name": "home", "kind": "kubernetes", "environment_tier": "non-prod", "kube_auth": "in_cluster"}]
 ---
 apiVersion: v1
 kind: Secret
 metadata: {name: control8-secrets, namespace: control8}
 type: Opaque
 stringData: {}
+  # Remote cluster: add a target with "kube_auth": "kubeconfig", "kubeconfig_env": "C8_KUBECONFIG_PROD_EU"
+  # and put the kubeconfig content here (never in the ConfigMap):
+  # C8_KUBECONFIG_PROD_EU: |
+  #   apiVersion: v1
+  #   kind: Config
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

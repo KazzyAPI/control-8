@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/base32"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -13,13 +14,18 @@ import (
 
 	"github.com/KazzyAPI/control-8/internal/config"
 	"github.com/KazzyAPI/control-8/internal/events"
+	"github.com/KazzyAPI/control-8/internal/targets"
 )
 
 // New returns the root handler: health, /api/v1, /auth, request-id + access log (API-007).
-func New(db *sql.DB, log *slog.Logger, cfg *config.Config) http.Handler {
+// tc may be nil (no targets); its status changes are published as target.status.
+func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker) http.Handler {
 	mux := http.NewServeMux()
 	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}, tick: realTick, streams: map[string]int{},
-		bus: events.New(cfg.EventsReplay, time.Now())}
+		bus: events.New(cfg.EventsReplay, time.Now()), targets: tc}
+	if tc != nil {
+		tc.Publish = s.publishTarget
+	}
 	s.routes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +36,11 @@ func New(db *sql.DB, log *slog.Logger, cfg *config.Config) http.Handler {
 			return
 		}
 		w.Write([]byte("ok\n"))
+		if tc != nil { // targets are reported, never required (ARC-013)
+			for _, t := range tc.List() {
+				fmt.Fprintf(w, "target %s reachable=%t\n", t.Name, t.Reachable)
+			}
+		}
 	})
 	return requestID(accessLog(log, mux))
 }

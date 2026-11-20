@@ -44,10 +44,8 @@ paths:
     get: {tags: [stacks], operationId: getInventory, responses: {'200': {description: All visible stacks, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
 
   /targets:
-    x-milestone: M5
     get: {tags: [targets], operationId: listTargets, description: 'Read-only; targets are defined in C8_TARGETS (D-49)', responses: {'200': {description: Targets, content: {application/json: {schema: {$ref: '#/components/schemas/TargetList'}}}}}}
   /targets/{target}:
-    x-milestone: M5
     parameters: [{name: target, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
     get: {tags: [targets], operationId: getTarget, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Target'}}}}}}
 

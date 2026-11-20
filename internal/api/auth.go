@@ -19,6 +19,7 @@ import (
 	"github.com/KazzyAPI/control-8/internal/config"
 	"github.com/KazzyAPI/control-8/internal/events"
 	"github.com/KazzyAPI/control-8/internal/store"
+	"github.com/KazzyAPI/control-8/internal/targets"
 )
 
 type server struct {
@@ -30,6 +31,7 @@ type server struct {
 	// shortcut: in-memory per-IP failure log (lost on restart, keyed by RemoteAddr), fine for a single replica
 	fails    map[string][]time.Time
 	bus      *events.Bus
+	targets  *targets.Checker
 	tick     func(time.Duration) (<-chan time.Time, func()) // heartbeat clock (faked in tests)
 	streams  map[string]int                                 // open SSE streams per principal (guarded by mu)
 	nstreams int
