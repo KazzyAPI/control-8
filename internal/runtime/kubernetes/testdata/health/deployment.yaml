@@ -1,0 +1,101 @@
+# K8S-063 / 08 health criteria: Deployment states. now/since are RFC3339; rev is the revision number.
+cases:
+- name: healthy
+  rev: 2
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 3, labels: {control-8/revision: "2"}}, spec: {replicas: 3}, status: {observedGeneration: 3, replicas: 3, updatedReplicas: 3, readyReplicas: 3, availableReplicas: 3}}
+  want: {healthy: true}
+- name: default replicas is 1
+  rev: 2
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 1, labels: {control-8/revision: "2"}}, spec: {}, status: {observedGeneration: 1, replicas: 1, updatedReplicas: 1, readyReplicas: 1, availableReplicas: 1}}
+  want: {healthy: true}
+- name: generation not yet observed
+  rev: 2
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 4, labels: {control-8/revision: "2"}}, spec: {replicas: 1}, status: {observedGeneration: 3, replicas: 1, updatedReplicas: 1, readyReplicas: 1, availableReplicas: 1}}
+  want: {healthy: false}
+- name: old replicas left
+  rev: 2
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 2, labels: {control-8/revision: "2"}}, spec: {replicas: 3}, status: {observedGeneration: 2, replicas: 4, updatedReplicas: 3, readyReplicas: 3, availableReplicas: 3}}
+  want: {healthy: false, reason: "3/3 updated"}
+- name: rising progress
+  rev: 2
+  now: "2026-01-01T00:00:20Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 2, labels: {control-8/revision: "2"}}, spec: {replicas: 3}, status: {observedGeneration: 2, replicas: 4, updatedReplicas: 2, readyReplicas: 3, availableReplicas: 2}}
+  want: {healthy: false, updated: 2, available: 2, desired: 3}
+- name: stale cache still shows previous revision
+  rev: 2
+  now: "2026-01-01T00:00:01Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 1, labels: {control-8/revision: "1"}}, spec: {replicas: 1}, status: {observedGeneration: 1, replicas: 1, updatedReplicas: 1, readyReplicas: 1, availableReplicas: 1}}
+  want: {healthy: false, reason: "observed"}
+- name: not in cache yet
+  rev: 1
+  now: "2026-01-01T00:00:01Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}, {kind: ConfigMap, metadata: {name: cfg}}]
+  cached: []
+  want: {healthy: false, reason: "not observed"}
+- name: ProgressDeadlineExceeded fails immediately
+  rev: 2
+  now: "2026-01-01T00:00:10Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 2, labels: {control-8/revision: "2"}}, spec: {replicas: 1}, status: {observedGeneration: 2, conditions: [{type: Progressing, status: "False", reason: ProgressDeadlineExceeded}]}}
+  want: {healthy: false, failed: true, reason: ProgressDeadlineExceeded}
+- name: crashloop pod older than 60s of the new rollout fails
+  rev: 2
+  now: "2026-01-01T00:02:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 2, labels: {control-8/revision: "2"}}, spec: {replicas: 1}, status: {observedGeneration: 2, replicas: 1, updatedReplicas: 1}}
+  - {kind: Pod, metadata: {name: web-7d9-abc, creationTimestamp: "2026-01-01T00:00:05Z", ownerReferences: [{kind: ReplicaSet, name: web-7d9}]}, status: {startTime: "2026-01-01T00:00:05Z", containerStatuses: [{state: {waiting: {reason: CrashLoopBackOff}}}]}}
+  want: {healthy: false, failed: true, reason: CrashLoopBackOff}
+- name: crashloop pod younger than 60s is still waiting
+  rev: 2
+  now: "2026-01-01T00:00:40Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 2, labels: {control-8/revision: "2"}}, spec: {replicas: 1}, status: {observedGeneration: 2, replicas: 1, updatedReplicas: 1}}
+  - {kind: Pod, metadata: {name: web-7d9-abc, creationTimestamp: "2026-01-01T00:00:05Z", ownerReferences: [{kind: ReplicaSet, name: web-7d9}]}, status: {startTime: "2026-01-01T00:00:05Z", containerStatuses: [{state: {waiting: {reason: ImagePullBackOff}}}]}}
+  want: {healthy: false, failed: false}
+- name: bad pod from before the apply is not the new revision
+  rev: 2
+  now: "2026-01-01T00:10:00Z"
+  since: "2026-01-01T00:09:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 2, labels: {control-8/revision: "2"}}, spec: {replicas: 1}, status: {observedGeneration: 2, replicas: 1, updatedReplicas: 1}}
+  - {kind: Pod, metadata: {name: web-old-abc, creationTimestamp: "2026-01-01T00:00:05Z", ownerReferences: [{kind: ReplicaSet, name: web-old}]}, status: {startTime: "2026-01-01T00:00:05Z", containerStatuses: [{state: {waiting: {reason: ErrImagePull}}}]}}
+  want: {healthy: false, failed: false}
+- name: pod of another workload does not fail this one
+  rev: 2
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Deployment, metadata: {name: web, generation: 2, labels: {control-8/revision: "2"}}, spec: {replicas: 1}, status: {observedGeneration: 2, replicas: 1, updatedReplicas: 1}}
+  - {kind: Pod, metadata: {name: web-api-7d9-abc, creationTimestamp: "2026-01-01T00:00:05Z", ownerReferences: [{kind: ReplicaSet, name: web-api-7d9}]}, status: {containerStatuses: [{state: {waiting: {reason: CrashLoopBackOff}}}]}}
+  want: {healthy: false, failed: false}

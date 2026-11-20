@@ -39,7 +39,7 @@ func WithInventory(e *inventory.Engine) Option {
 func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker, drivers DriverFunc, opts ...Option) http.Handler {
 	mux := http.NewServeMux()
 	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}, tick: realTick, streams: map[string]int{},
-		bus: events.New(cfg.EventsReplay, time.Now()), targets: tc, drivers: drivers}
+		bus: events.New(cfg.EventsReplay, time.Now()), targets: tc, drivers: drivers, progress: events.NewCoalescer(time.Second)}
 	if tc != nil {
 		tc.Publish = s.publishTarget
 	}

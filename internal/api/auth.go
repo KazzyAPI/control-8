@@ -37,8 +37,9 @@ type server struct {
 	streams     map[string]int                                 // open SSE streams per principal (guarded by mu)
 	nstreams    int
 	drivers     DriverFunc
-	locks       sync.Map       // per-stack worker mutex (DOM-001)
-	wg          sync.WaitGroup // running deployment and webhook goroutines (tests wait on it)
+	progress    *events.Coalescer // deployment.updated rollout progress, 1/s (EVT-005)
+	locks       sync.Map          // per-stack worker mutex (DOM-001)
+	wg          sync.WaitGroup    // running deployment and webhook goroutines (tests wait on it)
 	inv         *inventory.Engine
 	hookBackoff []time.Duration // webhook retry waits; nil = 1s, 5s (GRT-041)
 }

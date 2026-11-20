@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -24,10 +25,11 @@ type Engine struct {
 	timers   map[string]*time.Timer
 	last     map[string]string // fingerprint of the last write per stack
 	stopped  bool
+	subs     map[string][]chan struct{} // rollout waiters by stack (K8S-063)
 }
 
 func New(db *sql.DB, debounce time.Duration) *Engine {
-	return &Engine{DB: db, Debounce: debounce, caches: map[string]rt.Cache{}, timers: map[string]*time.Timer{}, last: map[string]string{}}
+	return &Engine{DB: db, Debounce: debounce, caches: map[string]rt.Cache{}, timers: map[string]*time.Timer{}, last: map[string]string{}, subs: map[string][]chan struct{}{}}
 }
 
 // SetCache installs (or, with nil, drops) the cache of a target.
@@ -45,6 +47,12 @@ func (e *Engine) SetCache(target string, c rt.Cache) {
 func (e *Engine) Enqueue(stackID string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	for _, c := range e.subs[stackID] {
+		select { // wake rollout waiters at once: they evaluate health themselves (K8S-063)
+		case c <- struct{}{}:
+		default:
+		}
+	}
 	if e.stopped || e.timers[stackID] != nil {
 		return
 	}
@@ -57,6 +65,26 @@ func (e *Engine) Enqueue(stackID string) {
 			e.Recompute(stackID)
 		}
 	})
+}
+
+// Cache returns the informer cache of a target, nil while it is not watched.
+func (e *Engine) Cache(target string) rt.Cache {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.caches[target]
+}
+
+// Subscribe returns a channel poked on every informer change of the stack, and its cancel func.
+func (e *Engine) Subscribe(stackID string) (<-chan struct{}, func()) {
+	c := make(chan struct{}, 1)
+	e.mu.Lock()
+	e.subs[stackID] = append(e.subs[stackID], c)
+	e.mu.Unlock()
+	return c, func() {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		e.subs[stackID] = slices.DeleteFunc(e.subs[stackID], func(x chan struct{}) bool { return x == c })
+	}
 }
 
 // Stop cancels pending recomputes.

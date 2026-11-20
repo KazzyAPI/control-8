@@ -69,7 +69,7 @@ func (d depRec) JSON(withOutput bool) map[string]any {
 	return m
 }
 
-// publishDep emits deployment.updated on every status change; transitions are never coalesced (EVT-005 is for M10 progress).
+// publishDep emits deployment.updated; status transitions go out directly, rollout progress through s.progress (EVT-005).
 func (s *server) publishDep(id string) {
 	if d, err := scanDep(s.db.QueryRow(depSel+`WHERE d.id=?`, id)); err == nil {
 		s.publish(events.Event{Type: "deployment.updated", At: s.now(), Namespace: d.NS, Data: d.JSON(false)})
@@ -444,11 +444,11 @@ func (s *server) execute(id string) {
 	s.publishDep(id)
 	x, _ := scanStack(s.db.QueryRow(stackSel+`WHERE st.id=?`, d.StackID))
 	var rend []map[string]any
-	var number int
+	var number, timeout int
 	var profile string
 	if d.Action == "apply" {
 		var raw string
-		s.db.QueryRow(`SELECT r.rendered,r.number,r.safety_profile FROM deployment d JOIN revision r ON r.id=d.revision_id WHERE d.id=?`, id).Scan(&raw, &number, &profile)
+		s.db.QueryRow(`SELECT r.rendered,r.number,r.safety_profile,r.rollout_timeout_seconds FROM deployment d JOIN revision r ON r.id=d.revision_id WHERE d.id=?`, id).Scan(&raw, &number, &profile, &timeout)
 		json.Unmarshal([]byte(raw), &rend)
 	}
 	var out string
@@ -461,7 +461,7 @@ func (s *server) execute(id string) {
 		if err != nil {
 			return &rt.Error{Code: "target_unreachable", Detail: err.Error()}
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute) // shortcut: fixed bound; M10 uses the revision's rollout timeout
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second+5*time.Minute) // D-26
 		defer cancel()
 		stack := rt.Stack{ID: x.ID, Namespace: x.K8sNamespace()}
 		if d.Action == "teardown" {
@@ -474,7 +474,11 @@ func (s *server) execute(id string) {
 			return err
 		}
 		wrote = true
+		s.setRollout(d.ID, rolloutState{State: "pending", Timeout: timeout, Workloads: []map[string]any{}})
 		if out, err = drv.Apply(ctx, plan); err != nil {
+			return err
+		}
+		if err := s.waitHealthy(ctx, d, x, rend, number, timeout); err != nil { // 08 apply step 4; failure leaves the cluster as is
 			return err
 		}
 		pruned, err := drv.Prune(ctx, plan)

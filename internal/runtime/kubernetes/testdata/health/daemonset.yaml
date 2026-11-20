@@ -1,0 +1,26 @@
+# K8S-063 / 08 health criteria: DaemonSet states.
+cases:
+- name: healthy
+  rev: 1
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: DaemonSet, metadata: {name: agent}}]
+  cached:
+  - {kind: DaemonSet, metadata: {name: agent, generation: 1, labels: {control-8/revision: "1"}}, status: {observedGeneration: 1, desiredNumberScheduled: 3, updatedNumberScheduled: 3, numberAvailable: 3, numberReady: 3}}
+  want: {healthy: true}
+- name: update in progress
+  rev: 1
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: DaemonSet, metadata: {name: agent}}]
+  cached:
+  - {kind: DaemonSet, metadata: {name: agent, generation: 2, labels: {control-8/revision: "1"}}, status: {observedGeneration: 2, desiredNumberScheduled: 3, updatedNumberScheduled: 1, numberAvailable: 3, numberReady: 3}}
+  want: {healthy: false, updated: 1, desired: 3}
+- name: generation not observed
+  rev: 1
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: DaemonSet, metadata: {name: agent}}]
+  cached:
+  - {kind: DaemonSet, metadata: {name: agent, generation: 2, labels: {control-8/revision: "1"}}, status: {observedGeneration: 1, desiredNumberScheduled: 3, updatedNumberScheduled: 3, numberAvailable: 3}}
+  want: {healthy: false}

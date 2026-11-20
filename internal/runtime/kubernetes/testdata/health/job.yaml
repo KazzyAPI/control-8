@@ -1,0 +1,35 @@
+# K8S-063 / 08 health criteria: Job states (Complete = healthy, Failed = unhealthy immediately).
+cases:
+- name: complete counts as healthy
+  rev: 1
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Job, metadata: {name: migrate}}]
+  cached:
+  - {kind: Job, metadata: {name: migrate, labels: {control-8/revision: "1"}}, spec: {completions: 1}, status: {succeeded: 1, conditions: [{type: Complete, status: "True"}]}}
+  want: {healthy: true}
+- name: running is waiting
+  rev: 1
+  now: "2026-01-01T00:00:30Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Job, metadata: {name: migrate}}]
+  cached:
+  - {kind: Job, metadata: {name: migrate, labels: {control-8/revision: "1"}}, spec: {}, status: {active: 1}}
+  want: {healthy: false, failed: false}
+- name: Failed condition fails immediately
+  rev: 1
+  now: "2026-01-01T00:00:30Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Job, metadata: {name: migrate}}]
+  cached:
+  - {kind: Job, metadata: {name: migrate, labels: {control-8/revision: "1"}}, spec: {}, status: {failed: 4, conditions: [{type: Failed, status: "True", reason: BackoffLimitExceeded}]}}
+  want: {healthy: false, failed: true, reason: BackoffLimitExceeded}
+- name: workloads all must pass
+  rev: 1
+  now: "2026-01-01T00:05:00Z"
+  since: "2026-01-01T00:00:00Z"
+  plan: [{kind: Job, metadata: {name: migrate}}, {kind: Deployment, metadata: {name: web}}]
+  cached:
+  - {kind: Job, metadata: {name: migrate, labels: {control-8/revision: "1"}}, spec: {}, status: {conditions: [{type: Complete, status: "True"}]}}
+  - {kind: Deployment, metadata: {name: web, generation: 1, labels: {control-8/revision: "1"}}, spec: {replicas: 2}, status: {observedGeneration: 1, replicas: 2, updatedReplicas: 2, availableReplicas: 1}}
+  want: {healthy: false}

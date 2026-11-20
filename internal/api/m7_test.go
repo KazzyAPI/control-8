@@ -105,7 +105,7 @@ func TestM7_ApplySucceeds(t *testing.T) {
 	if got["status"] != "succeeded" || got["output"] == "" || got["error"] != nil || got["started_at"] == nil || got["finished_at"] == nil {
 		t.Fatalf("%v", got)
 	}
-	if strings.Join(m.drv.calls, ",") != "precheck,apply,prune" { // 08: precheck, apply, prune (health wait is M10)
+	if strings.Join(m.drv.calls, ",") != "precheck,apply,prune" { // 08: precheck, apply, prune (the health wait needs the inventory engine, M10)
 		t.Fatalf("calls %v", m.drv.calls)
 	}
 	if st := m.stack(); st["state"] != "active" || st["desired_revision"] != float64(1) || st["safety_profile"] != "as_is" {
