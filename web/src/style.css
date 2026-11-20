@@ -1,0 +1,24 @@
+:root { --bg:#fff; --fg:#1a1a1a; --muted:#595959; --line:#d0d0d0; --blue:#1d4ed8; --amber:#f59e0b; --amber-bg:#fef3c7; --red:#b91c1c; --green:#15803d; --teal:#0f766e }
+@media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#eee; --muted:#aaa; --line:#444; --blue:#3b5fd6; --amber-bg:#4a3a0a; --red:#dc2626; --green:#4ade80 } }
+body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg) }
+a { color:inherit }
+header { display:flex; gap:1rem; align-items:center; padding:.5rem 1rem; border-bottom:1px solid var(--line) }
+header .who { margin-left:auto }
+main { padding:1rem; overflow-x:auto }
+:focus-visible { outline:3px solid var(--blue); outline-offset:2px }
+.skip { position:absolute; left:-999px } .skip:focus { left:0 }
+.badge { display:inline-block; padding:0 .5rem; border-radius:.25rem; font-weight:600 }
+.badge.managed { background:var(--blue); color:#fff }
+.badge.asis { background:var(--amber); color:#000; border:2px dashed #000 }
+.badge.parachute { background:var(--teal); color:#fff }
+.badge.none { border:1px solid var(--line); color:var(--muted) }
+.badge.tier.prod { background:var(--red); color:#fff }
+.badge.tier.nonprod { border:1px solid var(--muted); color:var(--muted) }
+.badge.large { font-size:1.25rem; padding:.25rem .75rem }
+.conn.live { color:var(--green) } .conn.reconnecting { color:#b45309 } .conn.offline { color:var(--red) }
+.stale { padding:.5rem 1rem; background:var(--amber-bg); border-bottom:2px solid var(--amber) }
+.stale.red { background:var(--red); color:#fff; border-color:var(--red) } .stale button { margin-left:1rem }
+.banner-red { background:var(--red); color:#fff; padding:.25rem 1rem }
+.modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); display:grid; place-items:center }
+.modal { background:var(--bg); padding:1.5rem; border-radius:.5rem }
+@media (prefers-reduced-motion: no-preference) { .flash { animation:flash 1s } @keyframes flash { from { background:var(--amber-bg) } } }

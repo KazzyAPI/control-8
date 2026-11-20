@@ -5,3 +5,8 @@
 deploy/control8.env
 deploy/control8.secrets.env
 .claude/
+node_modules/
+web/dist/*
+!web/dist/index.html
+web/test-results/
+web/playwright-report/

@@ -1,0 +1,45 @@
+name: ci
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: go.mod}
+      - run: make lint
+      - run: make test
+
+  k8s:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: go.mod}
+      - uses: helm/kind-action@v1
+        with: {cluster_name: c8-test}
+      - run: |
+          mkdir -p tmp
+          kind get kubeconfig --name c8-test > tmp/kubeconfig
+      - run: make test-k8s
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json}
+      - uses: actions/setup-go@v5
+        with: {go-version-file: go.mod}
+      - run: cd web && npm ci
+      - name: Generated client must match openapi.yaml (UI-001)
+        run: make gen-client && git diff --exit-code web/src/api/schema.d.ts
+      - run: make web-test
+      - run: cd web && npm run build
+      - name: Go build with the real bundle
+        run: make build
+      - run: cd web && npx playwright install --with-deps chromium
+      - run: cd web && npm run e2e

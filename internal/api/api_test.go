@@ -20,13 +20,13 @@ func TestHealthReadyRequestID(t *testing.T) { // API-007
 	}
 	var buf bytes.Buffer
 	h := New(db, slog.New(slog.NewJSONHandler(&buf, nil)), &config.Config{PublicURL: "http://localhost:8000"}, nil, nil)
-	for _, p := range []string{"/healthz", "/readyz", "/nope"} {
+	for _, p := range []string{"/healthz", "/readyz", "/api/v1/nope"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", p, nil))
 		if !strings.HasPrefix(rec.Header().Get("X-Request-Id"), "req_") {
 			t.Fatalf("%s: missing request id", p)
 		}
-		if p != "/nope" && rec.Code != 200 || p == "/nope" && rec.Code != 404 {
+		if p != "/api/v1/nope" && rec.Code != 200 || p == "/api/v1/nope" && rec.Code != 404 {
 			t.Fatalf("%s: status %d", p, rec.Code)
 		}
 	}

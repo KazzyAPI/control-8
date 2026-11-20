@@ -7,6 +7,8 @@ import (
 	"database/sql"
 	"encoding/base32"
 	"fmt"
+	"github.com/KazzyAPI/control-8/internal/web"
+	webfs "github.com/KazzyAPI/control-8/web"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -64,6 +66,7 @@ func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker, 
 			}
 		}
 	})
+	mux.Handle("/", web.Handler(webfs.Dist())) // SPA + history fallback (UI-005)
 	return requestID(accessLog(log, mux))
 }
 
