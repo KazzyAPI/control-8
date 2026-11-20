@@ -15,6 +15,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -298,10 +299,10 @@ func (c *Checker) Run(ctx context.Context, every time.Duration) {
 	}
 }
 
-// BuildClient makes a discovery client from a spec: in-cluster, or kubeconfig content from the
-// env var (or <VAR>_FILE) / mounted file. 10 s request timeout (K8S-003).
-func BuildClient(getenv func(string) string, readFile func(string) ([]byte, error)) func(Spec) (Versioner, error) {
-	return func(s Spec) (Versioner, error) {
+// RestConfig builds a client config from a spec: in-cluster, or kubeconfig content from the env var
+// (or <VAR>_FILE) / mounted file. 10 s request timeout (K8S-003).
+func RestConfig(getenv func(string) string, readFile func(string) ([]byte, error)) func(Spec) (*rest.Config, error) {
+	return func(s Spec) (*rest.Config, error) {
 		var cfg *rest.Config
 		var err error
 		if s.KubeAuth == "in_cluster" {
@@ -328,6 +329,45 @@ func BuildClient(getenv func(string) string, readFile func(string) ([]byte, erro
 			return nil, err
 		}
 		cfg.Timeout = 10 * time.Second
+		return cfg, nil
+	}
+}
+
+// BuildClient makes a discovery client from a spec (see RestConfig).
+func BuildClient(getenv func(string) string, readFile func(string) ([]byte, error)) func(Spec) (Versioner, error) {
+	rc := RestConfig(getenv, readFile)
+	return func(s Spec) (Versioner, error) {
+		cfg, err := rc(s)
+		if err != nil {
+			return nil, err
+		}
 		return discovery.NewDiscoveryClientForConfig(cfg)
+	}
+}
+
+// Dynamic returns a cached dynamic client per configured target name (used by the Kubernetes driver).
+func Dynamic(specs []Spec, getenv func(string) string, readFile func(string) ([]byte, error)) func(string) (dynamic.Interface, error) {
+	rc := RestConfig(getenv, readFile)
+	var mu sync.Mutex
+	cache := map[string]dynamic.Interface{}
+	return func(name string) (dynamic.Interface, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if c := cache[name]; c != nil {
+			return c, nil
+		}
+		i := slices.IndexFunc(specs, func(s Spec) bool { return s.Name == name })
+		if i < 0 {
+			return nil, errors.New("unknown target")
+		}
+		cfg, err := rc(specs[i])
+		if err != nil {
+			return nil, errors.New("kubeconfig_invalid")
+		}
+		c, err := dynamic.NewForConfig(cfg)
+		if err == nil {
+			cache[name] = c
+		}
+		return c, err
 	}
 }

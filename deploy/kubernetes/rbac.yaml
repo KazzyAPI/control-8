@@ -1,1 +1,37 @@
-# Placeholder: filled in M6 (K8S-005). Intentionally no rules in M0.
+# K8S-005: the only RBAC Control 8 needs to deploy to the cluster it runs in.
+# No escalate/bind, no other cluster-scoped writes. `watch` is for informers (M9, K8S-060).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: control8}
+rules:
+  - apiGroups: [""]
+    resources: [services, configmaps, persistentvolumeclaims, serviceaccounts]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: control8}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: control8}
+subjects:
+  - {kind: ServiceAccount, name: control8, namespace: control8}

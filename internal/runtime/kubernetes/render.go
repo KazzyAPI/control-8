@@ -1,5 +1,5 @@
 // Package kubernetes holds the manifest side of the Kubernetes runtime: parse, render (K8S-020..026).
-// Cluster writes arrive in M7; nothing here talks to a cluster.
+// Parse/Render talk to no cluster; cluster writes are in driver.go (K8S-000).
 package kubernetes
 
 import (

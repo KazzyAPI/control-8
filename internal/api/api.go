@@ -19,14 +19,16 @@ import (
 
 // New returns the root handler: health, /api/v1, /auth, request-id + access log (API-007).
 // tc may be nil (no targets); its status changes are published as target.status.
-func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker) http.Handler {
+// drivers may be nil (every deployment then fails target_unreachable).
+func New(db *sql.DB, log *slog.Logger, cfg *config.Config, tc *targets.Checker, drivers DriverFunc) http.Handler {
 	mux := http.NewServeMux()
 	s := &server{db: db, cfg: cfg, now: time.Now, fails: map[string][]time.Time{}, tick: realTick, streams: map[string]int{},
-		bus: events.New(cfg.EventsReplay, time.Now()), targets: tc}
+		bus: events.New(cfg.EventsReplay, time.Now()), targets: tc, drivers: drivers}
 	if tc != nil {
 		tc.Publish = s.publishTarget
 	}
 	s.routes(mux)
+	s.recoverDeployments()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)

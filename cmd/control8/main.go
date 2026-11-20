@@ -18,6 +18,8 @@ import (
 	"github.com/KazzyAPI/control-8/internal/api"
 	"github.com/KazzyAPI/control-8/internal/auth"
 	"github.com/KazzyAPI/control-8/internal/config"
+	rt "github.com/KazzyAPI/control-8/internal/runtime"
+	k8s "github.com/KazzyAPI/control-8/internal/runtime/kubernetes"
 	"github.com/KazzyAPI/control-8/internal/store"
 	"github.com/KazzyAPI/control-8/internal/targets"
 )
@@ -59,6 +61,14 @@ func main() {
 		log.Error("target sync", "err", err)
 		os.Exit(1)
 	}
+	dyn := targets.Dynamic(specs, os.Getenv, os.ReadFile)
+	drivers := func(name string) (rt.Driver, error) {
+		c, err := dyn(name)
+		if err != nil {
+			return nil, err
+		}
+		return k8s.NewDriver(c), nil
+	}
 	tc := targets.NewChecker(specs, targets.BuildClient(os.Getenv, os.ReadFile))
 
 	if err := auth.SyncTokens(db, tokens, time.Now(), log); err != nil {
@@ -75,7 +85,7 @@ func main() {
 	defer stop()
 	tc.Run(ctx, cfg.TargetCheck)
 	// BaseContext ends open SSE streams on shutdown (EVT-015)
-	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg, tc), ReadHeaderTimeout: 10 * time.Second,
+	srv := &http.Server{Addr: cfg.Listen, Handler: api.New(db, log, cfg, tc, drivers), ReadHeaderTimeout: 10 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() {
 		<-ctx.Done()

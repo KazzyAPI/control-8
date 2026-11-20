@@ -16,8 +16,8 @@ func TestOpenMigrateTwiceIsNoop(t *testing.T) {
 	}
 	var n int
 	db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&n)
-	if n != 5 {
-		t.Fatalf("schema_migrations rows = %d, want 5", n)
+	if n != 6 {
+		t.Fatalf("schema_migrations rows = %d, want 6", n)
 	}
 	if _, err := db.Exec(`SELECT name FROM target`); err != nil {
 		t.Fatal(err)

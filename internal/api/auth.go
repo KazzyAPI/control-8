@@ -35,6 +35,9 @@ type server struct {
 	tick     func(time.Duration) (<-chan time.Time, func()) // heartbeat clock (faked in tests)
 	streams  map[string]int                                 // open SSE streams per principal (guarded by mu)
 	nstreams int
+	drivers  DriverFunc
+	locks    sync.Map       // per-stack worker mutex (DOM-001)
+	wg       sync.WaitGroup // running deployment goroutines (tests wait on it)
 }
 
 const cookieName = "c8_session"

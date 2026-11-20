@@ -104,7 +104,6 @@ paths:
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}, {name: n, in: path, required: true, schema: {type: integer}}, {name: against, in: query, required: true, schema: {type: integer}}]
     get: {tags: [stacks], operationId: diffRevision, responses: {'200': {description: Unified diff, content: {text/plain: {schema: {type: string}}}}}}
   /namespaces/{ns}/stacks/{stack}/deployments:
-    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [deployments], operationId: listDeployments, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DeploymentList'}}}}}}
     post:
@@ -139,19 +138,15 @@ paths:
     get: {tags: [stacks], operationId: listServices, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Service'}}}}}}}}}
 
   /deployments/{id}:
-    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     get: {tags: [deployments], operationId: getDeployment, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}}}
   /deployments/{id}/approve:
-    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [deployments], operationId: approveDeployment, responses: {'200': {description: Approved, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
   /deployments/{id}/reject:
-    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [deployments], operationId: rejectDeployment, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], properties: {reason: {type: string}}}}}}, responses: {'200': {description: Rejected, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}}}
   /deployments/{id}/cancel:
-    x-milestone: M7
     parameters: [{$ref: '#/components/parameters/id'}]
     post: {tags: [deployments], operationId: cancelDeployment, responses: {'200': {description: Cancelled, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
 

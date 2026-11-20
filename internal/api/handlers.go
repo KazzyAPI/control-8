@@ -32,6 +32,7 @@ func (s *server) routes(mux *http.ServeMux) (patterns []string) {
 	reg("GET /api/v1/targets/{target}", s.api(s.getTarget))
 	s.nsRoutes(reg)
 	s.stackRoutes(reg)
+	s.depRoutes(reg)
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) { problem(w, 404, "not_found", "no such route") })
 	return
 }

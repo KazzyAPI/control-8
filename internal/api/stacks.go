@@ -164,15 +164,18 @@ func (s *server) createStack(w http.ResponseWriter, r *http.Request, p *auth.Pri
 	writeJSON(w, 201, x.JSON())
 }
 
-// deleteStack deletes a draft; teardown of a deployed stack needs the deployment flow (M7).
+// deleteStack deletes a draft; any other state requests a teardown deployment (08 Teardown).
 func (s *server) deleteStack(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	x, ok := s.loadStack(w, r, p, "operator", "stack.delete")
 	if !ok {
 		return
 	}
 	if x.State != "draft" {
-		s.auditNS(r, p, x.NS, "stack.delete", "stack", x.ID, "failed", map[string]any{"state": x.State})
-		problem(w, 409, "stack_not_draft", "only draft stacks can be deleted until teardown lands (M7)")
+		if x.State == "removed" {
+			problem(w, 409, "stack_removed", "stack was removed")
+			return
+		}
+		s.teardown(w, r, p, x)
 		return
 	}
 	s.db.Exec(`UPDATE stack SET state='removed',updated_at=? WHERE id=?`, store.Ts(s.now()), x.ID)
