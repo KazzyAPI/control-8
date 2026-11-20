@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -45,7 +43,7 @@ func TestKindM10_RolloutHealth(t *testing.T) {
 	}
 	m.eng.SetCache("home", c)
 	t.Cleanup(func() {
-		dyn.Resource(schema.GroupVersionResource{Version: "v1", Resource: "namespaces"}).Delete(context.Background(), "a", metav1.DeleteOptions{})
+		delNS(dyn)
 	})
 	run := func(manifests string) map[string]any {
 		m.revisionWith(manifests, "as_is")
@@ -65,7 +63,7 @@ func TestKindM10_RolloutHealth(t *testing.T) {
 	if got := run(good); got["status"] != "succeeded" || m.rollout(got["id"].(string))["result"] != "healthy" {
 		t.Fatalf("3 replicas: %v", got)
 	}
-	job := "apiVersion: batch/v1\nkind: Job\nmetadata: {name: ok}\nspec:\n  template:\n    spec: {restartPolicy: Never, containers: [{name: m, image: busybox, command: [true]}]}\n"
+	job := "apiVersion: batch/v1\nkind: Job\nmetadata: {name: ok}\nspec:\n  template:\n    spec: {restartPolicy: Never, containers: [{name: m, image: busybox, command: ['true']}]}\n"
 	if got := run(job); got["status"] != "succeeded" {
 		t.Fatalf("job: %v", got)
 	}
