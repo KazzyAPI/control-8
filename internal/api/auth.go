@@ -58,7 +58,12 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 
 func (s *server) audit(r *http.Request, p *auth.Principal, action, ttype, tid, outcome string, d map[string]any) {
-	e := audit.Event{Action: action, TargetType: ttype, TargetID: tid, Outcome: outcome, Details: d, RequestID: r.Header.Get("X-Request-Id")}
+	s.auditNS(r, p, "", action, ttype, tid, outcome, d)
+}
+
+// auditNS is audit with the namespace slug recorded in audit_event.namespace_id.
+func (s *server) auditNS(r *http.Request, p *auth.Principal, ns, action, ttype, tid, outcome string, d map[string]any) {
+	e := audit.Event{Namespace: ns, Action: action, TargetType: ttype, TargetID: tid, Outcome: outcome, Details: d, RequestID: r.Header.Get("X-Request-Id")}
 	if p != nil {
 		e.ActorType, e.ActorID, e.ActorDisplay, e.AuthMethod = "user", p.ID, p.Display, p.AuthMethod
 		if p.IsToken() {
@@ -95,7 +100,11 @@ func (s *server) api(h func(http.ResponseWriter, *http.Request, *auth.Principal)
 
 // deny maps an authz error to 404/403, audits the denial and writes the problem.
 func (s *server) deny(w http.ResponseWriter, r *http.Request, p *auth.Principal, action string, err error) {
-	s.audit(r, p, action, "", "", "denied", nil)
+	s.denyNS(w, r, p, "", action, err)
+}
+
+func (s *server) denyNS(w http.ResponseWriter, r *http.Request, p *auth.Principal, ns, action string, err error) {
+	s.auditNS(r, p, ns, action, "", "", "denied", nil)
 	if errors.Is(err, authz.ErrNotFound) {
 		problem(w, 404, "not_found", "not found")
 		return

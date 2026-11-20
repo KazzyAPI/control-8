@@ -53,7 +53,6 @@ paths:
     get: {tags: [targets], operationId: getTarget, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Target'}}}}}}
 
   /namespaces:
-    x-milestone: M2
     get: {tags: [namespaces], operationId: listNamespaces, parameters: [{$ref: '#/components/parameters/limit'}, {$ref: '#/components/parameters/cursor'}], responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceList'}}}}}}
     post:
       tags: [namespaces]
@@ -61,19 +60,16 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceCreate'}}}}
       responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}, '409': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}:
-    x-milestone: M2
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [namespaces], operationId: getNamespace, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}, '404': {$ref: '#/components/responses/Problem'}}}
     patch: {tags: [namespaces], operationId: updateNamespace, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/NamespaceUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Namespace'}}}}}}
     delete: {tags: [namespaces], operationId: deleteNamespace, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /namespaces/{ns}/assets:
-    x-milestone: M2
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [assets], operationId: listAssets, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AssetList'}}}}}}
     post: {tags: [assets], operationId: createAsset, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
   /namespaces/{ns}/assets/{asset}:
-    x-milestone: M2
     parameters: [{$ref: '#/components/parameters/ns'}, {name: asset, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
     get: {tags: [assets], operationId: getAsset, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
     patch: {tags: [assets], operationId: updateAsset, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
@@ -234,7 +230,6 @@ paths:
     get: {tags: [access], operationId: listTokens, description: 'Configured static tokens (C8_TOKENS), metadata only. No create/revoke in v1.', responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Token'}}}}}}}}}
 
   /audit:
-    x-milestone: M2
     get:
       tags: [audit]
       operationId: queryAudit

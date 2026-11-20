@@ -23,6 +23,7 @@ func (s *server) routes(mux *http.ServeMux) (patterns []string) {
 	reg("GET /api/v1/role-bindings", s.api(s.listBindings))
 	reg("POST /api/v1/role-bindings", s.api(s.createBinding))
 	reg("DELETE /api/v1/role-bindings/{id}", s.api(s.deleteBinding))
+	s.nsRoutes(reg)
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) { problem(w, 404, "not_found", "no such route") })
 	return
 }
