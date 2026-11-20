@@ -52,7 +52,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	if err := targets.Sync(db, specs); err != nil {
+	if err := targets.Sync(db, specs); errors.Is(err, targets.ErrInUse) {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	} else if err != nil {
 		log.Error("target sync", "err", err)
 		os.Exit(1)
 	}

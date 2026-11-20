@@ -247,6 +247,7 @@ func (s *server) deleteNamespace(w http.ResponseWriter, r *http.Request, p *auth
 		problem(w, 409, "namespace_not_empty", "namespace still has assets")
 		return
 	}
+	s.db.Exec(`DELETE FROM policy WHERE namespace_id=?`, n.ID)
 	s.db.Exec(`DELETE FROM namespace WHERE id=?`, n.ID)
 	s.auditNS(r, p, slug, "namespace.delete", "namespace", n.ID, "success", nil)
 	w.WriteHeader(204)
@@ -402,7 +403,13 @@ func (s *server) deleteAsset(w http.ResponseWriter, r *http.Request, p *auth.Pri
 	if !ok {
 		return
 	}
-	// The stack table lands in M6; it must add its own 409 here (DOM-005).
+	var stacks int
+	s.db.QueryRow(`SELECT count(*) FROM stack WHERE asset_id=?`, a.ID).Scan(&stacks)
+	if stacks > 0 { // removed stacks keep their row, so they count too
+		s.auditNS(r, p, a.Namespace, "asset.delete", "asset", a.ID, "failed", nil)
+		problem(w, 409, "asset_has_stacks", "asset still has stacks")
+		return
+	}
 	s.db.Exec(`DELETE FROM asset WHERE id=?`, a.ID)
 	s.auditNS(r, p, a.Namespace, "asset.delete", "asset", a.ID, "success", nil)
 	w.WriteHeader(204)

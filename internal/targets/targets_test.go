@@ -137,3 +137,32 @@ func TestK8S001_KubeconfigInvalidNeverLeaks(t *testing.T) {
 		t.Fatalf("events %d", len(events))
 	}
 }
+
+// K8S-002, DOM-011: removing a target that still has non-removed stacks fails before any change (main exits 2).
+func TestK8S002_TargetInUse(t *testing.T) {
+	db, _ := store.Open(filepath.Join(t.TempDir(), "c.db"))
+	defer db.Close()
+	spec := func(n string) Spec {
+		return Spec{Name: n, Kind: "kubernetes", Tier: "prod", KubeAuth: "kubeconfig", KubeconfigEnv: "C8_KUBECONFIG_X"}
+	}
+	a := []Spec{spec("a"), spec("b")}
+	if err := Sync(db, a); err != nil {
+		t.Fatal(err)
+	}
+	db.Exec(`INSERT INTO namespace(id,slug,display_name,environment_tier,created_at,updated_at) VALUES('ns_1','n','n','non-prod','t','t')`)
+	db.Exec(`INSERT INTO asset(id,namespace_id,slug,name,created_at,updated_at) VALUES('ast_1','ns_1','w','w','t','t')`)
+	db.Exec(`INSERT INTO stack(id,namespace_id,asset_id,target_id,slug,runtime,created_at,updated_at) VALUES('stk_1','ns_1','ast_1',?,'s','kubernetes','t','t')`, a[1].ID)
+	err := Sync(db, []Spec{spec("a")})
+	if !errors.Is(err, ErrInUse) || !strings.Contains(err.Error(), `"b"`) {
+		t.Fatalf("err = %v", err)
+	}
+	var n int
+	db.QueryRow(`SELECT count(*) FROM target`).Scan(&n)
+	if n != 2 {
+		t.Fatal("target removed despite stacks")
+	}
+	db.Exec(`UPDATE stack SET state='removed'`)
+	if err := Sync(db, []Spec{spec("a")}); err != nil {
+		t.Fatal(err)
+	}
+}

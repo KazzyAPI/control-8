@@ -24,6 +24,9 @@ import (
 	"github.com/KazzyAPI/control-8/internal/config"
 )
 
+// ErrInUse is the target_in_use startup failure (main exits 2).
+var ErrInUse = errors.New("target_in_use")
+
 // Spec is one C8_TARGETS entry; it holds references to credentials, never their content (K8S-001).
 type Spec struct {
 	ID             string `json:"-"`
@@ -75,21 +78,31 @@ func Parse(raw []json.RawMessage) ([]Spec, error) {
 }
 
 // Sync upserts specs by name, drops rows no longer configured, fills Spec.ID and audits changes (K8S-002).
-// shortcut: removal is not blocked by stacks; the target_in_use exit 2 lands with the stack table in M6.
+// A removed target that still has non-removed stacks fails with ErrInUse before anything changes (K8S-002, DOM-011).
 func Sync(db *sql.DB, specs []Spec) error {
 	rows, err := db.Query(`SELECT name,id,environment_tier FROM target`)
 	if err != nil {
 		return err
 	}
 	type old struct{ id, tier string }
-	have := map[string]old{}
+	have, gone := map[string]old{}, map[string]old{}
 	for rows.Next() {
 		var n string
 		var o old
 		rows.Scan(&n, &o.id, &o.tier)
-		have[n] = o
+		have[n], gone[n] = o, o
 	}
 	rows.Close()
+	for _, s := range specs {
+		delete(gone, s.Name)
+	}
+	for n, o := range gone {
+		var c int
+		db.QueryRow(`SELECT count(*) FROM stack WHERE target_id=? AND state!='removed'`, o.id).Scan(&c)
+		if c > 0 {
+			return fmt.Errorf("%w: target %q still has %d stack(s)", ErrInUse, n, c)
+		}
+	}
 	var added, removed []string
 	changed := []map[string]string{}
 	for i := range specs {

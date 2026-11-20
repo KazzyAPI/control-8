@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: web
+    app.kubernetes.io/managed-by: control-8
+    control-8/managed: "true"
+    control-8/namespace: shop
+    control-8/revision: "3"
+    control-8/safety-profile: managed_rollout
+    control-8/stack: stk_test
+    team: core
+  name: web
+  namespace: shop
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        app.kubernetes.io/managed-by: control-8
+        control-8/managed: "true"
+        control-8/namespace: shop
+        control-8/safety-profile: managed_rollout
+        control-8/stack: stk_test
+    spec:
+      containers:
+      - image: ghcr.io/acme/web:1.4
+        name: web
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: control-8
+    control-8/managed: "true"
+    control-8/namespace: shop
+    control-8/revision: "3"
+    control-8/safety-profile: managed_rollout
+    control-8/stack: stk_test
+  name: web
+  namespace: shop
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: web
+---
+apiVersion: v1
+data:
+  a: b
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: control-8
+    control-8/managed: "true"
+    control-8/namespace: shop
+    control-8/revision: "3"
+    control-8/safety-profile: managed_rollout
+    control-8/stack: stk_test
+  name: cfg
+  namespace: shop

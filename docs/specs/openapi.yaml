@@ -73,7 +73,6 @@ paths:
     delete: {tags: [assets], operationId: deleteAsset, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /namespaces/{ns}/stacks:
-    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [stacks], operationId: listStacks, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
     post:
@@ -82,7 +81,6 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StackCreate'}}}}
       responses: {'201': {description: Draft stack, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}/stacks/{stack}:
-    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: getStack, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}}}
     delete:
@@ -92,7 +90,6 @@ paths:
       requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {reason: {type: string, minLength: 1}, confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}}}}}}
       responses: {'204': {description: Draft deleted}, '202': {description: Teardown deployment, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}/stacks/{stack}/revisions:
-    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: listRevisions, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/RevisionList'}}}}}}
     post:
@@ -101,11 +98,9 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RevisionCreate'}}}}
       responses: {'201': {description: Created (may be policy-disallowed), content: {application/json: {schema: {$ref: '#/components/schemas/Revision'}}}}, '400': {$ref: '#/components/responses/Problem'}, '422': {$ref: '#/components/responses/Problem'}}
   /namespaces/{ns}/stacks/{stack}/revisions/{n}:
-    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}, {name: n, in: path, required: true, schema: {type: integer, minimum: 1}}]
     get: {tags: [stacks], operationId: getRevision, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Revision'}}}}}}
   /namespaces/{ns}/stacks/{stack}/revisions/{n}/diff:
-    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}, {name: n, in: path, required: true, schema: {type: integer}}, {name: against, in: query, required: true, schema: {type: integer}}]
     get: {tags: [stacks], operationId: diffRevision, responses: {'200': {description: Unified diff, content: {text/plain: {schema: {type: string}}}}}}
   /namespaces/{ns}/stacks/{stack}/deployments:
@@ -204,16 +199,13 @@ paths:
     post: {tags: [access-grants], operationId: revokeAccessGrant, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], additionalProperties: false, properties: {reason: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Revoked, content: {application/json: {schema: {$ref: '#/components/schemas/AccessGrant'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
 
   /policies/global:
-    x-milestone: M6
     get: {tags: [policy], operationId: getGlobalPolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
     put: {tags: [policy], operationId: putGlobalPolicy, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
   /namespaces/{ns}/policy:
-    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [policy], operationId: getNamespacePolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
     put: {tags: [policy], operationId: putNamespacePolicy, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
   /namespaces/{ns}/policy/effective:
-    x-milestone: M6
     parameters: [{$ref: '#/components/parameters/ns'}]
     get: {tags: [policy], operationId: getEffectivePolicy, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/PolicyRules'}}}}}}
 
