@@ -1,0 +1,68 @@
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { api, setCsrf } from './api/client'
+import type { components } from './api/schema'
+
+export type S = components['schemas']
+
+export async function get<T>(path: string, params?: object): Promise<T> {
+  const { data, response } = await (api as any).GET(path, { params })
+  if (!data) throw Object.assign(new Error(`GET ${path} ${response.status}`), { status: response.status })
+  return data as T
+}
+export const useGet = <T,>(key: unknown[], path: string, params?: object) =>
+  useQuery({ queryKey: key, queryFn: () => get<T>(path, params) })
+
+export async function fetchMe() {
+  const { data, response } = await api.GET('/me')
+  if (response.status === 401) { window.location.assign('/login'); return new Promise<never>(() => {}) } // UI-002: login is a full-page nav
+  if (!data) throw new Error(`GET /me ${response.status}`)
+  setCsrf(data.csrf_token ?? null)
+  return data
+}
+export const useMe = () => useQuery({ queryKey: ['me'], queryFn: fetchMe })
+
+// Loading / error / data render. Everything inside is rendered as React text (UI-003).
+export function Q<T>({ q, children }: { q: UseQueryResult<T>; children: (d: T) => ReactNode }) {
+  if (q.data !== undefined) return <>{children(q.data)}</>
+  if (q.error) return <p role="alert">{(q.error as any).status === 404 ? 'Not found.' : `Could not load: ${String(q.error)}`}</p>
+  return <p>Loading{'…'}</p>
+}
+
+export function useTitle(t: string) { useEffect(() => { document.title = `${t} — Control 8` }, [t]) }
+
+export const useNow = (ms = 1000) => {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), ms); return () => clearInterval(t) }, [ms])
+  return now
+}
+export const hhmm = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '—')
+export const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleString([], { hour12: false }) : '—')
+
+// UI-016 countdown text; null once expired.
+export function remaining(expires: string | null | undefined, now: number) {
+  if (!expires) return null
+  const s = Math.floor((Date.parse(expires) - now) / 1000)
+  if (s <= 0) return null
+  return s >= 60 ? `${Math.ceil(s / 60)} min left` : `${s} s left`
+}
+
+// UI-024: bumps when `sig` changes after first render; use as the row key and add class `flash` when > 0.
+export function useFlash(sig: string) {
+  const prev = useRef(sig)
+  const [n, setN] = useState(0)
+  useEffect(() => { if (prev.current !== sig) { prev.current = sig; setN((x) => x + 1) } }, [sig])
+  return n
+}
+
+// UI-004: tables scroll inside their own focusable container (axe: scrollable-region-focusable).
+export function Table({ label, head, children }: { label: string; head: string[]; children: ReactNode }) {
+  return (
+    <div className="scroll" tabIndex={0} role="region" aria-label={label}>
+      <table><thead><tr>{head.map((h) => <th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{children}</tbody></table>
+    </div>
+  )
+}
+
+export const sumReady = (s: S['Stack']) => (s.services ?? []).reduce((a, v) => [a[0] + (v.ready_replicas ?? 0), a[1] + (v.desired_replicas ?? 0)], [0, 0])
+export const profileTag = (p?: string | null) => (p === 'managed_rollout' ? '[ROLLOUT]' : p === 'as_is' ? '[AS-IS]' : p === 'parachute' ? '[PARACHUTE]' : '')

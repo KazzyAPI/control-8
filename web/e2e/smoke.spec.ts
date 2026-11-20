@@ -7,12 +7,12 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('shell renders after break-glass login and deep link reloads (UI-005)', async ({ page }) => {
-  await page.goto('/n/shop/s/web')
-  await expect(page.getByRole('heading', { name: 'Stack' })).toBeVisible()
+  await page.goto('/audit')
+  await expect(page.getByRole('heading', { name: 'Audit' })).toBeVisible()
   await expect(page.getByText('Break-glass session')).toBeVisible()
   await expect(page.locator('.conn')).toHaveText(/Live/)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Stack' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Audit' })).toBeVisible()
 })
 
 test('unauthenticated visit redirects to /login', async ({ browser, baseURL }) => {

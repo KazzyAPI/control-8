@@ -1,21 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link, Route, Routes, useParams } from 'react-router'
-import { api, setCsrf } from './api/client'
+import { Link, Route, Routes } from 'react-router'
+import { useMe } from './lib'
+import { Asset, Namespace, Overview } from './screens/Browse'
+import { Deployment, Revision, Stack } from './screens/Stack'
+import { Audit, Grants, Targets } from './screens/Feeds'
 import { SessionEndedModal, ConnectionIndicator, StaleBanner } from './components/StreamStatus'
 import { useEventStream } from './events/useEventStream'
-
-async function fetchMe() {
-  const { data, response } = await api.GET('/me')
-  if (response.status === 401) { window.location.assign('/login'); return new Promise<never>(() => {}) } // UI-002: login is a full-page nav
-  if (!data) throw new Error(`GET /me ${response.status}`)
-  setCsrf(data.csrf_token ?? null)
-  return data
-}
-
-function Placeholder({ what }: { what: string }) {
-  const p = useParams()
-  return <p>{what}{Object.keys(p).length ? ` (${Object.values(p).join(' / ')})` : ''} — coming in M14.</p>
-}
 
 function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
   const { conn, retry } = useEventStream()
@@ -23,7 +12,10 @@ function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
     <>
       <a className="skip" href="#main">Skip to content</a>
       <header>
-        <nav aria-label="Main"><Link to="/">Control 8</Link></nav>
+        <nav aria-label="Main">
+          <Link to="/">Control 8</Link> <Link to="/access">My grants</Link> <Link to="/access/active">Active grants</Link> <Link to="/audit">Audit</Link>
+          {me.global_admin && <> <Link to="/admin/targets">Targets</Link></>}
+        </nav>
         <ConnectionIndicator conn={conn} />
         <span className="who">{me.display_name}{me.auth_method === 'break_glass' && ' (break-glass)'}</span>
       </header>
@@ -31,8 +23,16 @@ function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
       <StaleBanner conn={conn} onRetry={retry} />
       <main id="main">
         <Routes>
-          <Route path="/" element={<><h1>Overview</h1><Placeholder what="Overview" /></>} />
-          <Route path="/n/:ns/s/:stack" element={<><h1>Stack</h1><Placeholder what="Stack" /></>} />
+          <Route path="/" element={<Overview />} />
+          <Route path="/n/:ns" element={<Namespace />} />
+          <Route path="/n/:ns/assets/:asset" element={<Asset />} />
+          <Route path="/n/:ns/s/:stack" element={<Stack />} />
+          <Route path="/n/:ns/s/:stack/revisions/:n" element={<Revision />} />
+          <Route path="/deployments/:id" element={<Deployment />} />
+          <Route path="/audit" element={<Audit />} />
+          <Route path="/access" element={<Grants />} />
+          <Route path="/access/active" element={<Grants active />} />
+          <Route path="/admin/targets" element={<Targets />} />
           <Route path="*" element={<><h1>Not found</h1><Link to="/">Back to overview</Link></>} />
         </Routes>
       </main>
@@ -40,8 +40,6 @@ function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
     </>
   )
 }
-
-const useMe = () => useQuery({ queryKey: ['me'], queryFn: fetchMe })
 
 export default function App() {
   const { data: me, error } = useMe()
