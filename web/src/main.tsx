@@ -4,6 +4,9 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import App from './App'
 import './style.css'
+import { applyTheme, readTheme } from './theme'
+
+applyTheme(readTheme())
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1 } } })
 createRoot(document.getElementById('root')!).render(

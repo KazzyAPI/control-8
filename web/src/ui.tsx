@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { cloneElement, createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type FormEvent, type ReactElement, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { api } from './api/client'
 import type { S } from './lib'
@@ -31,8 +31,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ toast, say }}>
       {children}
-      <div className="toast toast-end z-50">
-        {toasts.map((t) => <p key={t.id} className={`alert ${t.kind === 'error' ? 'alert-error' : 'alert-success'}`} role={t.kind === 'error' ? 'alert' : 'status'}>{t.text}</p>)}
+      <div className="toast toast-end z-50 max-lg:mb-16">
+        {toasts.map((t) => <div key={t.id} className={`alert ${t.kind === 'error' ? 'alert-error' : 'alert-success'}`} role={t.kind === 'error' ? 'alert' : 'status'}>{t.text}</div>)}
       </div>
       <div className="sr-only" role="status" aria-live="polite">{said}</div>
     </Ctx.Provider>
@@ -69,16 +69,43 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
     return () => { if (typeof d.close === 'function') d.close() }
   }, [])
   return (
-    <dialog ref={ref} className="modal" aria-labelledby="dlg-title" onCancel={(e) => { e.preventDefault(); onClose() }}>
+    <dialog ref={ref} className="modal modal-bottom sm:modal-middle" aria-labelledby="dlg-title" onCancel={(e) => { e.preventDefault(); onClose() }}>
       <div className="modal-box">
-        <h2 id="dlg-title" className="text-lg font-bold">{title}</h2>
+        <h2 id="dlg-title" className="text-lg font-bold mt-0">{title}</h2>
         {children}
+        <p className="text-xs mt-2">Press <kbd className="kbd kbd-xs">Esc</kbd> to cancel.</p>
       </div>
+      <form method="dialog" className="modal-backdrop"><button type="button" tabIndex={-1} aria-hidden="true" onClick={onClose}>close</button></form>
     </dialog>
   )
 }
 
-export const FormError = ({ msg }: { msg: string | null }) => (msg ? <p className="text-error font-semibold" role="alert">{msg}</p> : null)
+export const FormError = ({ msg }: { msg: string | null }) => (msg ? <div className="alert alert-error my-2" role="alert"><span>{msg}</span></div> : null)
+
+// daisyUI v5 form row: fieldset + legend-styled label wired to the control by id; `vhint` is the validator-hint
+// (shown by the control's `validator` state), `hint` is always-visible help.
+export function Field({ label, hint, vhint, children }: { label: ReactNode; hint?: ReactNode; vhint?: string; children: ReactElement<{ id?: string }> }) {
+  const id = useId()
+  return (
+    <fieldset className="fieldset">
+      <label className="fieldset-legend" htmlFor={id}>{label}</label>
+      {cloneElement(children, { id })}
+      {vhint && <p className="validator-hint">{vhint}</p>}
+      {hint && <p className="text-sm">{hint}</p>}
+    </fieldset>
+  )
+}
+
+// Button with a spinner while its mutation runs (disabled meanwhile). The spinner is decorative; the name stays the label.
+export function Btn({ busy, children, className = 'btn btn-sm', ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean }) {
+  return <button {...p} className={className} disabled={busy || p.disabled} aria-busy={busy || undefined}>
+    {busy && <span className="loading loading-spinner loading-xs" aria-hidden="true" />}{children}</button>
+}
+// Click handler that may return a promise: busy until it settles.
+export function AsyncBtn({ onClick, ...p }: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & { onClick: () => unknown }) {
+  const [busy, setBusy] = useState(false)
+  return <Btn {...p} busy={busy} onClick={async () => { setBusy(true); try { await onClick() } finally { setBusy(false) } }} />
+}
 
 // Reason (+ optional typed confirmation) dialog used by revoke, reject, teardown.
 export function ReasonDialog({ title, submit, typed, onClose, onSubmit, children }: {
@@ -87,19 +114,23 @@ export function ReasonDialog({ title, submit, typed, onClose, onSubmit, children
   const [reason, setReason] = useState('')
   const [t, setT] = useState('')
   const [shown, setShown] = useState(false)
+  const [busy, setBusy] = useState(false)
   const err = reqErr(reason, 'Reason') ?? (typed && t !== typed ? `Type "${typed}" to confirm` : null)
   const go = async (e: FormEvent) => {
     e.preventDefault(); setShown(true)
-    if (!err && (await onSubmit(reason.trim())) !== undefined) onClose()
+    if (err) return
+    setBusy(true)
+    try { if ((await onSubmit(reason.trim())) !== undefined) onClose() } finally { setBusy(false) }
   }
   return (
     <Dialog title={title} onClose={onClose}>
       <form onSubmit={go} noValidate>
         {children}
-        <label>Reason <input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></label>
-        {typed && <label>Type <code>{typed}</code> to confirm <input value={t} onChange={(e) => setT(e.target.value)} autoComplete="off" /></label>}
+        <Field label="Reason" vhint="A reason is required"><input className="input validator w-full" required value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></Field>
+        {typed && <Field label={<>Type <code>{typed}</code> to confirm</>} vhint={`Type ${typed} exactly`}>
+          <input className="input validator w-full" required pattern={typed} value={t} onChange={(e) => setT(e.target.value)} autoComplete="off" /></Field>}
         <FormError msg={shown ? err : null} />
-        <p className="modal-action"><button type="submit">{submit}</button> <button type="button" onClick={onClose}>Cancel</button></p>
+        <div className="modal-action"><Btn type="submit" busy={busy} className="btn btn-error btn-sm">{submit}</Btn> <button type="button" className="btn btn-sm" onClick={onClose}>Cancel</button></div>
       </form>
     </Dialog>
   )

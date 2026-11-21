@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { Link, NavLink, Route, Routes } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { Route, Routes, useLocation } from 'react-router'
 import { useMe } from './lib'
 import { ToastProvider, useToast } from './ui'
 import { Asset, Namespace, Overview } from './screens/Browse'
@@ -8,63 +8,83 @@ import { AdminAccess, AdminPolicy, Approvals, ApproverQueue } from './screens/Ac
 import { NewRevision, RequestAccess } from './screens/Write'
 import { Audit, Grants, Targets } from './screens/Feeds'
 import { SessionEndedModal, ConnectionIndicator, StaleBanner } from './components/StreamStatus'
+import { Breadcrumbs, BottomDock, Footer, Sidebar, ThemeSwitcher, UserMenu, useNavCounts } from './components/Nav'
+import { Empty, Icon, ICONS } from './components/Parts'
 import Login from './screens/Login'
 import { useEventStream } from './events/useEventStream'
 
 function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
   const { conn, retry } = useEventStream()
   const { say } = useToast()
+  const counts = useNavCounts(me)
+  const loc = useLocation()
+  const [drawer, setDrawer] = useState(false)
   const n = me.active_grants?.length ?? 0
   const prev = useRef(n)
   useEffect(() => { if (n !== prev.current) say(n > prev.current ? 'Prod access granted' : 'Prod access ended'); prev.current = n }, [n, say]) // UI-031
-  const links: [string, string][] = [['/approvals', 'Approvals'], ['/access', 'My grants'], ['/access/request', 'Request access'],
-    ...(me.global_admin || me.approver_for?.length ? [['/access/approvals', 'Approver queue'] as [string, string]] : []), ['/access/active', 'Active grants'], ['/audit', 'Audit'],
-    ...(me.global_admin ? [['/admin/access', 'Admin: access'], ['/admin/policy', 'Admin: policy'], ['/admin/targets', 'Targets']] as [string, string][] : [])]
+  useEffect(() => setDrawer(false), [loc.pathname])
+  useEffect(() => {
+    if (!drawer) return
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawer(false) }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [drawer])
   return (
-    <>
-      <a className="skip btn btn-sm" href="#main">Skip to content</a>
-      <header className="navbar bg-base-200 gap-2 flex-wrap">
-        <nav aria-label="Main" className="flex-1">
-          <ul className="menu menu-horizontal menu-sm flex-wrap">
-            <li><Link to="/" className="font-bold text-base">Control 8</Link></li>
-            {links.map(([to, text]) => <li key={to}><NavLink to={to} end className={({ isActive }) => (isActive ? 'menu-active' : '')}>{text}</NavLink></li>)}
-          </ul>
-        </nav>
-        <ConnectionIndicator conn={conn} />
-        <span className="who font-medium">{me.display_name}{me.auth_method === 'break_glass' && ' (break-glass)'}</span>
-      </header>
-      {me.auth_method === 'break_glass' && <div className="alert alert-error rounded-none" role="status">Break-glass session</div>}
-      <StaleBanner conn={conn} onRetry={retry} />
-      <main id="main" className="p-4 max-w-7xl mx-auto">
-        <Routes>
-          <Route path="/" element={<Overview />} />
-          <Route path="/n/:ns" element={<Namespace />} />
-          <Route path="/n/:ns/assets/:asset" element={<Asset />} />
-          <Route path="/n/:ns/s/:stack" element={<Stack />} />
-          <Route path="/n/:ns/s/:stack/revisions/new" element={<NewRevision />} />
-          <Route path="/n/:ns/s/:stack/revisions/:n" element={<Revision />} />
-          <Route path="/deployments/:id" element={<Deployment />} />
-          <Route path="/audit" element={<Audit />} />
-          <Route path="/access" element={<Grants />} />
-          <Route path="/access/active" element={<Grants active />} />
-          <Route path="/access/request" element={<RequestAccess />} />
-          <Route path="/access/approvals" element={<ApproverQueue />} />
-          <Route path="/approvals" element={<Approvals />} />
-          <Route path="/admin/access" element={<AdminAccess />} />
-          <Route path="/admin/policy" element={<AdminPolicy />} />
-          <Route path="/admin/targets" element={<Targets />} />
-          <Route path="*" element={<><h1>Not found</h1><Link className="link" to="/">Back to overview</Link></>} />
-        </Routes>
-      </main>
-      <SessionEndedModal conn={conn} />
-    </>
+    <div className="drawer lg:drawer-open">
+      <input id="nav-drawer" type="checkbox" className="drawer-toggle" checked={drawer} onChange={(e) => setDrawer(e.target.checked)} tabIndex={-1} aria-hidden="true" />
+      <div className="drawer-content flex flex-col min-h-screen min-w-0">
+        <a className="skip btn btn-sm" href="#main">Skip to content</a>
+        <header className="navbar bg-base-100 border-b border-base-300 sticky top-0 z-20 gap-2 min-h-14">
+          <button type="button" className="btn btn-square btn-ghost lg:hidden" aria-label="Open navigation" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}><Icon d={ICONS.menu} /></button>
+          <div className="flex-1 min-w-0"><Breadcrumbs /></div>
+          <ConnectionIndicator conn={conn} />
+          <ThemeSwitcher />
+          <UserMenu me={me} />
+        </header>
+        {me.auth_method === 'break_glass' && <div className="alert alert-error rounded-none" role="status"><span>Break-glass session</span></div>}
+        <StaleBanner conn={conn} onRetry={retry} />
+        <main id="main" className="p-4 max-w-7xl w-full mx-auto flex-1 pb-24 lg:pb-4">
+          <Routes>
+            <Route path="/" element={<Overview />} />
+            <Route path="/n/:ns" element={<Namespace />} />
+            <Route path="/n/:ns/assets/:asset" element={<Asset />} />
+            <Route path="/n/:ns/s/:stack" element={<Stack />} />
+            <Route path="/n/:ns/s/:stack/revisions/new" element={<NewRevision />} />
+            <Route path="/n/:ns/s/:stack/revisions/:n" element={<Revision />} />
+            <Route path="/deployments/:id" element={<Deployment />} />
+            <Route path="/audit" element={<Audit />} />
+            <Route path="/access" element={<Grants />} />
+            <Route path="/access/active" element={<Grants active />} />
+            <Route path="/access/request" element={<RequestAccess />} />
+            <Route path="/access/approvals" element={<ApproverQueue />} />
+            <Route path="/approvals" element={<Approvals />} />
+            <Route path="/admin/access" element={<AdminAccess />} />
+            <Route path="/admin/policy" element={<AdminPolicy />} />
+            <Route path="/admin/targets" element={<Targets />} />
+            <Route path="*" element={<><h1>Not found</h1><Empty to="/" cta="Back to overview">That page does not exist.</Empty></>} />
+          </Routes>
+        </main>
+        <Footer />
+        <BottomDock counts={counts} onMenu={() => setDrawer(true)} />
+        <SessionEndedModal conn={conn} />
+      </div>
+      <div className="drawer-side z-40">
+        <label htmlFor="nav-drawer" aria-hidden="true" className="drawer-overlay" />
+        <Sidebar me={me} counts={counts} />
+      </div>
+    </div>
   )
 }
 
 function Authed() {
   const { data: me, error } = useMe()
-  if (error) return <p className="alert alert-error m-4" role="alert">Could not load your session: {String(error)}</p>
-  if (!me) return <p className="p-4"><span className="loading loading-spinner" aria-hidden="true" /> Loading{'…'}</p>
+  if (error) return <div className="alert alert-error m-4" role="alert"><span>Could not load your session: {String(error)}</span></div>
+  if (!me) return (
+    <div className="flex min-h-screen" role="status"><span className="sr-only">Loading{'…'}</span>
+      <div className="hidden lg:block w-64 bg-base-200 p-6 space-y-4" aria-hidden="true"><div className="skeleton h-6 w-32" />{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-4 w-40" />)}</div>
+      <div className="flex-1" aria-hidden="true"><div className="navbar border-b border-base-300"><div className="skeleton h-4 w-48" /></div><div className="p-4 space-y-4"><div className="skeleton h-8 w-64" /><div className="skeleton h-40 w-full" /></div></div>
+    </div>
+  )
   return <ToastProvider><Shell me={me} /></ToastProvider>
 }
 

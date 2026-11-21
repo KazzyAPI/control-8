@@ -1,6 +1,7 @@
 @import "tailwindcss";
+/* Themes are compiled in (no runtime injection). The switcher offers exactly these; see decision D-104. */
 @plugin "daisyui" {
-  themes: light --default, dark --prefersdark;
+  themes: light --default, dark --prefersdark, corporate, business, nord;
 }
 /* Darker status hues so coloured text passes axe contrast (4.5:1) on the light page. */
 @plugin "daisyui/theme" {
@@ -13,33 +14,48 @@
   --color-info: oklch(45% 0.15 240);
   --color-info-content: oklch(98% 0 0);
 }
+/* The same contrast guard for the other switcher themes (axe 4.5:1 for coloured text on the page surface; D-104). */
+@plugin "daisyui/theme" {
+  name: "corporate";
+  --color-error: oklch(50% 0.21 27);
+  --color-error-content: oklch(98% 0 0);
+}
+@plugin "daisyui/theme" {
+  name: "business";
+  --color-error: oklch(72% 0.17 25);
+  --color-error-content: oklch(18% 0.02 25);
+}
+@plugin "daisyui/theme" {
+  name: "nord";
+  --color-error: oklch(50% 0.17 20);
+  --color-error-content: oklch(98% 0 0);
+}
+/* daisyUI dims table headers to 60%; keep them at full contrast on every theme. */
+.table :where(thead, tfoot) { color: var(--color-base-content) }
 .skip { position:absolute; left:-999px; z-index:50 } .skip:focus { left:0 }
 :focus-visible { outline:3px solid var(--color-primary); outline-offset:2px }
 @media (prefers-reduced-motion: no-preference) { .flash { animation:flash 1s } @keyframes flash { from { background:var(--color-warning) } } }
 
-/* Tailwind's preflight strips element defaults; restore a readable baseline and give plain form elements daisyUI components. */
+/* Tailwind's preflight strips element defaults; restore a readable baseline for unclassed elements only. */
 @layer base {
   h1 { @apply text-2xl font-bold mb-4 }
   h2 { @apply text-xl font-semibold mt-6 mb-2 }
   h3 { @apply text-lg font-semibold mt-4 mb-2 }
-  main p, main ul, main ol, main form { @apply my-2 }
-  main ul:not(.menu, .steps, .menu *), main ol { padding-inline-start: 1.5rem }
-  main ul:not(.menu, .steps, .menu *) { list-style: disc }
-  main ol { list-style: decimal }
-  main a:not(.btn, .menu *) { @apply link link-primary }
+  main p, main form { @apply my-2 }
+  main ul:not([class]), main ol:not([class]) { @apply my-2; padding-inline-start: 1.5rem }
+  main ul:not([class]) { list-style: disc }
+  main ol:not([class]) { list-style: decimal }
+  main a:not([class], .menu *) { @apply link link-primary }
   code, pre { @apply font-mono }
-  pre { @apply p-2 text-sm }
 }
-@layer components {
-  :is(main, dialog) :is(input:not([type=checkbox], [type=radio], [type=hidden]), select, textarea) { @apply w-full max-w-xl }
-  :is(main, dialog) input:not([type=checkbox], [type=radio], [type=hidden]) { @apply input }
-  :is(main, dialog) select { @apply select }
-  :is(main, dialog) textarea { @apply textarea font-mono }
-  :is(main, dialog) input[type=checkbox] { @apply checkbox checkbox-sm }
-  :is(main, dialog) input[type=radio] { @apply radio radio-sm }
-  :is(main, dialog) button { @apply btn btn-sm }
-  :is(main, dialog) button[type=submit] { @apply btn-primary }
-  :is(main, dialog) fieldset { @apply border border-base-300 rounded-box p-3 my-2 }
-  :is(.stackform, .filters, dialog form) label { @apply flex flex-col gap-1 my-2 }
-  :is(.stackform, .filters, dialog form) label:has(> input:is([type=checkbox], [type=radio])) { @apply flex-row items-center gap-2 }
+
+/* CSP is default-src 'self' (no data: images), so daisyUI's inline data-URI masks are replaced by the same artwork as
+   real files (emitted by Vite; assetsInlineLimit is 0). Without this the loaders and tooltip arrows would render as solid blocks. */
+:root { --fx-noise: none }
+.loading, .loading-spinner { -webkit-mask-image: url('./loaders/spinner.svg'); mask-image: url('./loaders/spinner.svg') }
+.loading-dots { -webkit-mask-image: url('./loaders/dots.svg'); mask-image: url('./loaders/dots.svg') }
+.tooltip:after { --mask-tooltip: url('./loaders/tooltip-arrow.svg') }
+@media (prefers-reduced-motion: reduce) {
+  .loading, .loading-spinner { -webkit-mask-image: url('./loaders/spinner-slow.svg'); mask-image: url('./loaders/spinner-slow.svg') }
+  .loading-dots { -webkit-mask-image: url('./loaders/dots-slow.svg'); mask-image: url('./loaders/dots-slow.svg') }
 }

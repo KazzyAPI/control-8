@@ -2,6 +2,7 @@ import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, setCsrf } from './api/client'
 import type { components } from './api/schema'
+import { Skeleton, type Fallback } from './components/Parts'
 
 export type S = components['schemas']
 
@@ -22,11 +23,11 @@ export async function fetchMe() {
 }
 export const useMe = () => useQuery({ queryKey: ['me'], queryFn: fetchMe })
 
-// Loading / error / data render. Everything inside is rendered as React text (UI-003).
-export function Q<T>({ q, children }: { q: UseQueryResult<T>; children: (d: T) => ReactNode }) {
+// Loading / error / data render. Everything inside is rendered as React text (UI-003). `fallback` picks the skeleton shape.
+export function Q<T>({ q, children, fallback = 'text' }: { q: UseQueryResult<T>; children: (d: T) => ReactNode; fallback?: Fallback }) {
   if (q.data !== undefined) return <>{children(q.data)}</>
-  if (q.error) return <p className="alert alert-error" role="alert">{(q.error as any).status === 404 ? 'Not found.' : `Could not load: ${String(q.error)}`}</p>
-  return <div className="skeleton h-16 w-full" role="status"><span className="sr-only">Loading{'…'}</span></div>
+  if (q.error) return <div className="alert alert-error my-2" role="alert"><span>{(q.error as any).status === 404 ? 'Not found.' : `Could not load: ${String(q.error)}`}</span></div>
+  return <Skeleton kind={fallback} />
 }
 
 export function useTitle(t: string) { useEffect(() => { document.title = `${t} — Control 8` }, [t]) }
@@ -58,8 +59,8 @@ export function useFlash(sig: string) {
 // UI-004: tables scroll inside their own focusable container (axe: scrollable-region-focusable).
 export function Table({ label, head, children }: { label: string; head: string[]; children: ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-box border border-base-300 my-2" tabIndex={0} role="region" aria-label={label}>
-      <table className="table table-zebra [&_tbody_tr:hover_*]:bg-base-300"><thead><tr>{head.map((h) => <th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{children}</tbody></table>
+    <div className="overflow-auto max-h-[75vh] rounded-box border border-base-300 my-2" tabIndex={0} role="region" aria-label={label}>
+      <table className="table table-zebra table-pin-rows [&_tbody_tr:hover_*]:bg-base-300"><thead><tr>{head.map((h) => <th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{children}</tbody></table>
     </div>
   )
 }

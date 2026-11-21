@@ -51,3 +51,41 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await c.close()
   })
 }
+
+// Every theme the switcher offers must pass axe (D-104). The choice is persisted in localStorage and applied as data-theme.
+for (const theme of ['light', 'dark', 'corporate', 'business', 'nord']) {
+  test(`axe passes on the shell and sign-in in the ${theme} theme (UI-033)`, async ({ page, browser, baseURL }) => {
+    await page.addInitScript((t) => localStorage.setItem('c8:theme', t), theme)
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await page.getByRole('button', { name: 'Choose theme' }).focus()
+    await page.getByRole('button', { name: /Break-glass admin/ }).focus()
+    await page.waitForTimeout(500) // dropdown fades in; axe must not sample mid-transition
+    const { violations } = await new AxeBuilder({ page }).analyze()
+    expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([])
+    const c = await browser.newContext({ baseURL })
+    const login = await c.newPage()
+    await login.addInitScript((t) => localStorage.setItem('c8:theme', t), theme)
+    await login.goto('/login')
+    await expect(login.getByLabel('Break-glass password')).toBeVisible()
+    const r = await new AxeBuilder({ page: login }).analyze()
+    expect(r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([])
+    await c.close()
+  })
+}
+
+test('phone width: drawer opens from the hamburger, dock is shown, no horizontal page scroll', async ({ browser, baseURL }) => {
+  const c = await browser.newContext({ baseURL, viewport: { width: 375, height: 700 } })
+  const page = await c.newPage()
+  expect((await page.request.post('/auth/break-glass', { data: { password: 'e2e-password' } })).status()).toBe(204)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Quick navigation' })).toBeVisible()
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Audit' })).toBeVisible()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Audit' }).click()
+  await expect(page.getByRole('heading', { name: 'Audit' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await c.close()
+})
