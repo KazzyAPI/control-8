@@ -383,3 +383,15 @@ func TestAPI002_OpenAPIParity(t *testing.T) {
 		}
 	}
 }
+
+func TestAUTH010_BreakGlassLoginForm(t *testing.T) { // AUTH-010: the /login page form
+	e := newEnv(t)
+	form := map[string]string{"Content-Type": "application/x-www-form-urlencoded"}
+	if w := e.do("POST", "/auth/break-glass", "password=nope", form); w.Code != 401 {
+		t.Fatalf("bad password: %d", w.Code)
+	}
+	w := e.do("POST", "/auth/break-glass", "password="+bgPass, form)
+	if w.Code != 303 || w.Header().Get("Location") != "/" || len(w.Result().Cookies()) == 0 {
+		t.Fatalf("form login: %d %v", w.Code, w.Header())
+	}
+}

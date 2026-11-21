@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -141,7 +142,7 @@ const (
 	bgMax    = 5
 )
 
-// breakGlass: POST {"password"} (AUTH-010..013). Shortcut: no GET login form until the SPA (M13).
+// breakGlass: POST {"password"} JSON or the /login form (AUTH-010..013).
 func (s *server) breakGlass(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.BreakglassHash == "" {
 		problem(w, 404, "not_found", "break-glass is disabled")
@@ -166,7 +167,11 @@ func (s *server) breakGlass(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct{ Password string }
-	if !decode(w, r, &body) {
+	isForm := strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded")
+	if isForm { // the /login page form; JSON clients are unchanged
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<10)
+		body.Password = r.PostFormValue("password")
+	} else if !decode(w, r, &body) {
 		return
 	}
 	if !auth.VerifyPassword(s.cfg.BreakglassHash, body.Password) {
@@ -189,6 +194,10 @@ func (s *server) breakGlass(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: cookie, Path: "/", HttpOnly: true, Secure: s.secureCookie(),
 		SameSite: http.SameSiteLaxMode, MaxAge: 3600})
 	s.audit(r, &auth.Principal{ID: id, Display: "Break-glass admin", AuthMethod: "break_glass"}, "auth.break_glass", "user", id, "success", d)
+	if isForm {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	w.WriteHeader(204)
 }
 

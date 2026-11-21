@@ -19,7 +19,7 @@ func (s *server) routes(mux *http.ServeMux) (patterns []string) {
 	reg("POST /auth/break-glass", s.breakGlass)
 	reg("GET /auth/login", s.oidcLogin)
 	reg("GET /auth/callback", s.oidcCallback)
-	reg("GET /login", htmlPage("Sign in", `<p><a href="/auth/login">Sign in with OIDC</a></p>`))
+	reg("GET /login", htmlPage("Sign in", `<p><a href="/auth/login">Sign in with OIDC</a></p><form method="post" action="/auth/break-glass"><label>Break-glass password <input type="password" name="password" autocomplete="current-password" required></label> <button>Sign in</button></form>`))
 	reg("GET /no-access", htmlPage("No access", "<p>No access: ask an admin to map your group.</p>"))
 	reg("POST /auth/logout", s.api(s.logout))
 	reg("GET /api/v1/events", s.api(s.stream))
