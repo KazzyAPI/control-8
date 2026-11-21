@@ -57,8 +57,8 @@ MANIFESTS=$'apiVersion: v1\nkind: ConfigMap\nmetadata: {name: smoke-cfg}\ndata: 
 deploy() { # deploy NS TIER -> echoes the deployment id
   local ns=$1 tier=$2
   expect 201 POST /api/v1/namespaces "$(jq -nc --arg s "$ns" --arg t "$tier" '{slug:$s,display_name:$s,environment_tier:$t} + (if $t=="prod" then {approver_group:"smoke-approvers"} else {} end)')"
-  expect 201 POST "/api/v1/namespaces/$ns/assets" '{"slug":"web","name":"Web"}'
-  expect 201 POST "/api/v1/namespaces/$ns/stacks" "$(jq -nc --arg t "$TARGET" '{slug:"s1",asset:"web",target:$t}')"
+  expect 201 POST "/api/v1/namespaces/$ns/assets" "$(jq -nc --arg s "web-$ns" '{slug:$s,name:"Web"}')" # D-149: asset slugs are unique per product, not per namespace
+  expect 201 POST "/api/v1/namespaces/$ns/stacks" "$(jq -nc --arg t "$TARGET" --arg a "web-$ns" '{slug:"s1",asset:$a,target:$t}')"
   expect 201 POST "/api/v1/namespaces/$ns/stacks/s1/revisions" "$(jq -nc --arg m "$MANIFESTS" '{safety_profile:"as_is",manifests:$m}')"
   expect 202 POST "/api/v1/namespaces/$ns/stacks/s1/deployments" "$(jq -nc --arg t "$tier" '{revision:1,confirm_safety_profile:"as_is",confirm_environment_tier:$t,reason:"smoke"}')"
   jq -r .id "$BODY"
