@@ -30,6 +30,11 @@ Governance control plane for Kubernetes: namespaces, asset catalog, raw-manifest
 - Discovery (M19+, `docs/specs/11-discovery.md`) is read-only: separate informers, never Secrets/ConfigMaps, findings never block or write. Only an adopt deployment may label pre-existing objects (metadata only, planned uids, no pod-template change, generation must not change); never adopt tool-managed (Argo/Flux/Helm/operator) objects; never force.
 - No new dependencies or scope beyond v1 without a decision-log row in `docs/specs/README.md`.
 
+## UI components
+
+Build web screens from the shared components in `web/src/components/ui/` and daisyUI v5 classes; never raw HTML tables, buttons or hand-rolled cards/dialogs.
+Toast after every mutation, `ConfirmDialog` for destructive actions, theme tokens only, axe clean in all five themes. See "UI conventions" in `docs/specs/06-ui.md`.
+
 ## Build workflow
 
 1. Follow `docs/specs/07-roadmap.md` milestone by milestone (M0..M16 built; then M17, M17b, M18, M18b, M19..M21; Docker track D1..D3 only when the owner asks); one milestone per session.

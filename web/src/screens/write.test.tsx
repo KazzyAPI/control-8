@@ -79,7 +79,7 @@ it('API-004/UI error toasts: a 403 problem+json (missing CSRF) shows as an alert
   fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Web' } })
   fireEvent.click(screen.getByRole('button', { name: 'Create asset' }))
   const t = await screen.findByText(/csrf_failed/)
-  expect(t.getAttribute('role')).toBe('alert')
+  expect(t.closest("[role=alert]")).not.toBeNull()
   expect(sent()[0].headers.get('X-CSRF-Token')).toBeNull()
 })
 

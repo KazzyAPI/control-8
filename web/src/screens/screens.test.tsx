@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, expect, it } from 'vitest'
 import { applyEvent } from '../events/dispatch'
@@ -59,20 +59,20 @@ it('audit feed: new event on top, held while paused', async () => {
   const ev = (id: number) => ({ id, at: '2026-01-01T00:00:00Z', action: `act${id}`, outcome: 'success' })
   const qc = mount('/audit', <Audit />, [[['audit', '', '', '', ''], { items: [ev(2), ev(1)] }]])
   await act(async () => applyEvent(qc, { type: 'audit.created', at: '', data: ev(3) }))
-  await waitFor(() => expect(screen.getAllByRole('rowheader')[0].textContent).toBe('act3'))
+  await waitFor(() => expect(within(screen.getByRole("list", { name: "Audit events" })).getAllByRole("listitem")[0].textContent).toContain("act3"))
   fireEvent.click(screen.getByText('Pause'))
   await act(async () => applyEvent(qc, { type: 'audit.created', at: '', data: ev(4) }))
   expect(await screen.findByText('1 new event')).toBeTruthy()
-  expect(screen.getAllByRole('rowheader')[0].textContent).toBe('act3')
+  expect(within(screen.getByRole("list", { name: "Audit events" })).getAllByRole("listitem")[0].textContent).toContain("act3")
   fireEvent.click(screen.getByText('Resume'))
-  await waitFor(() => expect(screen.getAllByRole('rowheader')[0].textContent).toBe('act4'))
+  await waitFor(() => expect(within(screen.getByRole("list", { name: "Audit events" })).getAllByRole("listitem")[0].textContent).toContain("act4"))
 })
 
 it('grants: countdown for active, expired rows leave the active list', async () => {
   const g = (id: string, expires_at: string) => ({ id, requester: 'u1', namespace: 'shop', target: 't', status: 'active', expires_at, reason: 'r' })
   mount('/access/active', <Grants active />, [[['grants', 'all'], { items: [g('a', soon()), g('b', new Date(Date.now() - 1000).toISOString())] }]])
   expect(screen.getByText(/min left/)).toBeTruthy()
-  expect(screen.getAllByRole('row').length).toBe(2) // header + the live one
+  expect(screen.getAllByRole("timer").length).toBe(1) // only the live grant counts down
 })
 
 it('admin targets table (global_admin only)', async () => {

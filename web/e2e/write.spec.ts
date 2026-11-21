@@ -186,6 +186,7 @@ test.describe('real API', () => {
     await page.getByRole('button', { name: 'Add binding' }).click()
     await expect(page.getByRole('rowheader', { name: 'wshop-devs' })).toBeVisible()
     await page.getByRole('button', { name: 'Delete binding wshop-devs operator' }).click()
+    await page.getByRole("dialog").getByRole("button", { name: "Delete binding" }).click()
     await expect(page.getByRole('rowheader', { name: 'wshop-devs' })).toHaveCount(0)
     await page.goto('/admin/policy')
     await page.getByLabel(/allowed registries/).fill('ghcr.io/acme/')

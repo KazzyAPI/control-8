@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { banner, indicator, type Conn } from '../events/connection'
+import { Icon, Notice } from './ui'
 
 const useNow = () => {
   const [now, setNow] = useState(Date.now())
@@ -25,10 +26,9 @@ export function StaleBanner({ conn, onRetry }: { conn: Conn; onRetry: () => void
   const level = banner(conn, useNow())
   if (level === 'none') return null
   return (
-    <div className={`alert rounded-none ${level === 'red' ? 'alert-error' : 'alert-warning'}`} role="status">
-      <span>Live updates paused {'—'} showing data from {hhmmss(conn.lastLive ?? conn.since)}. Reconnecting{'…'} <span className="loading loading-dots loading-sm align-middle" aria-hidden="true" /></span>
-      {level === 'red' && <button className="btn btn-sm" onClick={onRetry}>Retry now</button>}
-    </div>
+    <Notice tone={level === 'red' ? 'error' : 'warning'} className="rounded-none py-2" action={level === 'red' ? <button className="btn btn-sm" onClick={onRetry}>Retry now</button> : undefined}>
+      Live updates paused {'—'} showing data from {hhmmss(conn.lastLive ?? conn.since)}. Reconnecting{'…'} <span className="loading loading-dots loading-sm align-middle" aria-hidden="true" />
+    </Notice>
   )
 }
 
@@ -38,7 +38,8 @@ export function SessionEndedModal({ conn }: { conn: Conn }) {
   return (
     <div className="modal modal-open">
       <div role="alertdialog" aria-modal="true" aria-labelledby="se-title" className="modal-box">
-        <h2 id="se-title" className="text-lg font-bold">Your session ended</h2>
+        <h2 id="se-title" className="text-lg font-bold flex items-center gap-2"><Icon name="lock" className="size-5 text-primary" />Your session ended</h2>
+        <p className="mt-2 text-sm">Sign in again to keep working.</p>
         <div className="modal-action"><a className="btn btn-primary" href="/login" autoFocus>Log in</a></div>
       </div>
     </div>

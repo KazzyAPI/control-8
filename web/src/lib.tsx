@@ -1,8 +1,10 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { api, setCsrf } from './api/client'
 import type { components } from './api/schema'
-import { Skeleton, type Fallback } from './components/Parts'
+import { Notice } from './components/ui/Notice'
+import { Skeleton, type Fallback } from './components/ui/Skeletons'
+export { useFlash } from './components/ui/useFlash'
 
 export type S = components['schemas']
 
@@ -26,7 +28,7 @@ export const useMe = () => useQuery({ queryKey: ['me'], queryFn: fetchMe })
 // Loading / error / data render. Everything inside is rendered as React text (UI-003). `fallback` picks the skeleton shape.
 export function Q<T>({ q, children, fallback = 'text' }: { q: UseQueryResult<T>; children: (d: T) => ReactNode; fallback?: Fallback }) {
   if (q.data !== undefined) return <>{children(q.data)}</>
-  if (q.error) return <div className="alert alert-error my-2" role="alert"><span>{(q.error as any).status === 404 ? 'Not found.' : `Could not load: ${String(q.error)}`}</span></div>
+  if (q.error) return <Notice tone="error" role="alert">{(q.error as any).status === 404 ? 'Not found.' : `Could not load: ${String(q.error)}`}</Notice>
   return <Skeleton kind={fallback} />
 }
 
@@ -46,23 +48,6 @@ export function remaining(expires: string | null | undefined, now: number) {
   const s = Math.floor((Date.parse(expires) - now) / 1000)
   if (s <= 0) return null
   return s >= 60 ? `${Math.ceil(s / 60)} min left` : `${s} s left`
-}
-
-// UI-024: bumps when `sig` changes after first render; use as the row key and add class `flash` when > 0.
-export function useFlash(sig: string) {
-  const prev = useRef(sig)
-  const [n, setN] = useState(0)
-  useEffect(() => { if (prev.current !== sig) { prev.current = sig; setN((x) => x + 1) } }, [sig])
-  return n
-}
-
-// UI-004: tables scroll inside their own focusable container (axe: scrollable-region-focusable).
-export function Table({ label, head, children }: { label: string; head: string[]; children: ReactNode }) {
-  return (
-    <div className="overflow-auto max-h-[75vh] rounded-box border border-base-300 my-2" tabIndex={0} role="region" aria-label={label}>
-      <table className="table table-zebra table-pin-rows [&_tbody_tr:hover_*]:bg-base-300"><thead><tr>{head.map((h) => <th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{children}</tbody></table>
-    </div>
-  )
 }
 
 export const sumReady = (s: S['Stack']) => (s.services ?? []).reduce((a, v) => [a[0] + (v.ready_replicas ?? 0), a[1] + (v.desired_replicas ?? 0)], [0, 0])

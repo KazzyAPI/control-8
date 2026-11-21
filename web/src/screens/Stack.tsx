@@ -1,59 +1,85 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
-import { ProfileBadge, StatusBadge, TierBadge } from '../components/Badges'
-import { Empty, MockCode, PageHeader, Pager, ProdRibbon, Radial, Stat, Stats, Tabs } from '../components/Parts'
-import { TargetNote } from '../components/Rows'
-import { get, hhmm, profileTag, Q, remaining, sumReady, Table, useFlash, useGet, useProdAccess, useTitle, when, type S } from '../lib'
+import { healthOf, ReadyBar, TargetNote } from '../components/Rows'
+import { Avatar, DataTable, DiffView, EmptyState, Icon, KeyValueList, MockCode, Notice, Page, PageHeader, Pager, ProfileBadge, Radial, SectionCard, StatusBadge, Stepper, Tabs, TierBadge, TierBanner, Timeline,
+  Tip, type Accent, type Column, type StepState } from '../components/ui'
+import { get, hhmm, profileTag, Q, remaining, sumReady, useGet, useProdAccess, useTitle, when, type S } from '../lib'
 import { DeploymentActions } from './Access'
 import { AuditFeed } from './Feeds'
 import { DeployDialog, StackActions } from './Write'
 
-const Workload = ({ s }: { s: S['Service'] }) => {
-  const n = useFlash(JSON.stringify([s.ready_replicas, s.desired_replicas, s.image_ref, s.state]))
-  const [r, d] = [s.ready_replicas ?? 0, s.desired_replicas ?? 0]
-  return (
-    <tr key={n} className={n ? 'flash' : ''}>
-      <th scope="row">{s.kind}/{s.name}</th>
-      <td>{r}/{d} <progress className={`progress w-16 align-middle ${r < d ? 'progress-warning' : 'progress-success'}`} value={r} max={Math.max(d, 1)} aria-hidden="true" /></td>
-      <td>{s.image_ref ?? '—'}</td>
-      <td>{s.image_id ?? '—'}</td>
-    </tr>
-  )
+// "registry/repo:tag" -> [repo, tag]; digests and missing tags fall back to latest/none.
+const splitImage = (ref?: string | null): [string, string] => {
+  if (!ref) return ['No image yet', '']
+  const at = ref.indexOf('@'); if (at >= 0) return [ref.slice(0, at), ref.slice(at + 1, at + 13)]
+  const i = ref.lastIndexOf(':')
+  return i > ref.lastIndexOf('/') ? [ref.slice(0, i), ref.slice(i + 1)] : [ref, 'latest']
 }
 
-export const DeploymentRows = ({ items }: { items: S['Deployment'][] }) => (
-  <Table label="Deployments" head={['Deployment', 'Revision', 'Safety profile', 'Status', 'Requested by']}>
-    {items.map((d) => <tr key={d.id}>
-      <th scope="row"><Link to={`/deployments/${d.id}`}>{d.id}</Link></th>
-      <td>{d.revision ?? '—'}</td><td><ProfileBadge profile={d.safety_profile} /></td><td><StatusBadge text={d.status} /></td><td>{d.requested_by}</td></tr>)}
-  </Table>
-)
+const WORKLOAD_COLUMNS: Column<S['Service']>[] = [
+  { key: 'w', header: 'Workload', rowHeader: true, cell: (s) => <>{s.kind}/{s.name}{s.is_database && <span className="badge badge-ghost badge-sm ml-2">database</span>}</> },
+  { key: 'h', header: 'Status', cell: (s) => { const [r, d] = [s.ready_replicas ?? 0, s.desired_replicas ?? 0]; return <StatusBadge text={s.health ?? (d && r >= d ? 'healthy' : 'degraded')} /> } },
+  { key: 'r', header: 'Ready', cell: (s) => <ReadyBar r={s.ready_replicas ?? 0} d={s.desired_replicas ?? 0} /> },
+  { key: 'i', header: 'Image', hideBelow: 'md', cell: (s) => <span className="font-mono text-xs break-all">{s.image_ref ?? '—'}</span> },
+  { key: 'g', header: 'Digest', hideBelow: 'lg', cell: (s) => <span className="font-mono text-xs break-all">{s.image_id ?? '—'}</span> },
+]
 
+const DEP_COLUMNS: Column<S['Deployment']>[] = [
+  { key: 'id', header: 'Deployment', rowHeader: true, cell: (d) => <Link to={`/deployments/${d.id}`}>{d.id}</Link> },
+  { key: 'rev', header: 'Revision', cell: (d) => d.revision ?? '—' },
+  { key: 'p', header: 'Safety profile', hideBelow: 'md', cell: (d) => <ProfileBadge profile={d.safety_profile} /> },
+  { key: 's', header: 'Status', cell: (d) => <StatusBadge text={d.status} /> },
+  { key: 'by', header: 'Requested by', hideBelow: 'sm', cell: (d) => <span className="inline-flex items-center gap-2"><Avatar name={d.requested_by} size="sm" />{d.requested_by}</span> },
+]
+export const DeploymentRows = ({ items }: { items: S['Deployment'][] }) => <DataTable label="Deployments" columns={DEP_COLUMNS} rows={items} rowKey={(d) => d.id} />
+
+const depTone = (s?: string | null): Accent => (s === 'succeeded' ? 'success' : s === 'failed' || s === 'rejected' ? 'error' : s === 'pending_approval' ? 'warning' : 'primary')
 // Deployment history as a compact vertical timeline (newest first).
 const DeploymentHistory = ({ items }: { items: S['Deployment'][] }) => (
-  <ul className="timeline timeline-vertical timeline-compact timeline-snap-icon">
-    {items.map((d, i) => <li key={d.id}>
-      {i > 0 && <hr />}
-      <div className="timeline-middle"><span className="status status-primary" aria-hidden="true" /></div>
-      <div className="timeline-end timeline-box flex flex-wrap items-center gap-2 my-2"><Link to={`/deployments/${d.id}`}>{d.id}</Link> <StatusBadge text={d.status} /> <span>revision {d.revision ?? '—'} by {d.requested_by}</span></div>
-      {i < items.length - 1 && <hr />}
-    </li>)}
-  </ul>
+  <Timeline label="Recent deployments" items={items.map((d) => ({ id: d.id, tone: depTone(d.status),
+    content: <div className="flex flex-wrap items-center gap-2"><Link to={`/deployments/${d.id}`} className="font-medium">{d.id}</Link> <StatusBadge text={d.status} /> <span className="text-sm">revision {d.revision ?? '—'} by {d.requested_by}</span></div> }))} />
 )
 
 // UI-016: live grant state for a prod stack.
 export function GrantState({ s }: { s: S['Stack'] }) {
   const a = useProdAccess(s.namespace!, s.target!, s.environment_tier)
   if (a.state === 'open') return null
-  if (a.state === 'bypass') return <div className="alert alert-warning my-2"><span>Grant bypassed (break-glass)</span></div>
-  if (a.state === 'active') return <div className="alert alert-success my-2"><span>Access until {hhmm(a.active!.expires_at)} {'—'} {remaining(a.active!.expires_at, a.now)}</span></div>
-  if (a.state === 'pending') return <div className="alert alert-info my-2"><span>Awaiting approval</span></div>
-  return <div className="alert my-2"><span><Link to={`/access/request?namespace=${s.namespace}&target=${s.target}`}>Request prod access</Link></span></div>
+  if (a.state === 'bypass') return <Notice tone="warning">Grant bypassed (break-glass)</Notice>
+  if (a.state === 'active') return <Notice tone="success" title="Prod access active">Access until {hhmm(a.active!.expires_at)} {'—'} {remaining(a.active!.expires_at, a.now)}</Notice>
+  if (a.state === 'pending') return <Notice tone="info">Awaiting approval</Notice>
+  return <Notice tone="info" action={<Link className="btn btn-sm btn-primary" to={`/access/request?namespace=${s.namespace}&target=${s.target}`}><Icon name="key" className="size-4" />Request prod access</Link>}>Changes to this prod stack need an access grant.</Notice>
 }
 
 type StackTab = 'overview' | 'revisions' | 'deployments' | 'audit' | 'settings'
 const REV_PAGE = 10
+const ROLL_STEPS = ['Apply', 'Roll out', 'Health check', 'Done']
+const rollSteps = (st?: string | null) => { const at = st === 'done' ? 4 : st === 'waiting' || st === 'rolling_out' ? 2 : 1
+  return ROLL_STEPS.map((label, i): { label: string; state: StepState } => ({ label, state: i < at - 1 ? 'done' : i === at - 1 ? 'current' : 'todo' })) }
+
+// Hero summary: what is running (image and version), how healthy it is, and where.
+function Summary({ s }: { s: S['Stack'] }) {
+  const [r, d] = sumReady(s)
+  const [repo, tag] = splitImage(s.services?.find((v) => v.image_ref)?.image_ref)
+  return (
+    <section aria-label="Summary" className="card card-border bg-base-100 shadow-sm"><div className="card-body gap-5 lg:flex-row lg:items-center">
+      <div className="flex items-center gap-4 flex-1 min-w-0">
+        <span className="grid place-items-center size-14 shrink-0 rounded-box bg-primary text-primary-content"><Icon name="cube" className="size-8" /></span>
+        <div className="min-w-0"><p className="text-xs uppercase tracking-wide">Running image</p>
+          <p className="font-mono font-semibold break-all">{repo}</p>
+          {tag && <span className="badge badge-primary mt-1">{tag}</span>}</div>
+      </div>
+      <div className="flex items-center gap-4">
+        <Radial value={d ? (r / d) * 100 : 0} size="5rem" tone={d && r < d ? 'warning' : 'success'} label="Replicas ready" />
+        <div><StatusBadge text={healthOf(s)} /><p className="text-sm mt-1">{r}/{d} replicas ready</p></div>
+      </div>
+      <div className="lg:border-l lg:border-base-300 lg:pl-6"><KeyValueList items={[
+        { label: 'Target', value: <>{s.target} <span className="text-sm font-normal">({s.runtime})</span></>, icon: 'server' },
+        { label: 'Desired revision', value: s.desired_revision ? <Link to={`/n/${s.namespace}/s/${s.slug}/revisions/${s.desired_revision}`}>Revision {s.desired_revision}</Link> : '—', icon: 'document' },
+        { label: 'State', value: s.state, icon: 'bolt' }]} /></div>
+    </div></section>
+  )
+}
 
 export function Stack() {
   const { ns = '', stack = '' } = useParams()
@@ -67,62 +93,57 @@ export function Stack() {
   useTitle(s ? `${stack} — ${ns} [${s.environment_tier === 'prod' ? 'PROD' : 'NON-PROD'}] ${profileTag(s.safety_profile)}`.trim() : stack)
   const running = (deps.data?.items ?? []).find((d) => d.status === 'running' && d.rollout?.workloads?.length)
   return (
-    <Q q={q} fallback="page">{(s) => { const [r, d] = sumReady(s); return <>
-      <ProdRibbon tier={s.environment_tier} />
-      <PageHeader title={s.slug} badges={<><TierBadge tier={s.environment_tier} large /><ProfileBadge profile={s.safety_profile} large /></>}
-        actions={<Link className="btn btn-primary btn-sm" to={`/n/${ns}/s/${stack}/revisions/new`}>New revision</Link>} />
+    <Q q={q} fallback="page">{(s) => <Page>
+      <PageHeader icon="layers" title={s.slug} subtitle={<>{s.asset && <><Link to={`/n/${ns}/assets/${s.asset}`}>{s.asset}</Link> {'·'} </>}<Link to={`/n/${ns}`}>{ns}</Link> on {s.target}</>}
+        badges={<><TierBadge tier={s.environment_tier} large /><ProfileBadge profile={s.safety_profile} large /></>}
+        actions={<Link className="btn btn-primary btn-sm" to={`/n/${ns}/s/${stack}/revisions/new`}><Icon name="plus" className="size-4" />New revision</Link>} />
+      <TierBanner tier={s.environment_tier} />
       <TargetNote target={s.target} />
-      {s.rollout_frozen && <div className="alert alert-error my-2" role="alert"><span>Automatic updates stopped after a failed rollback {'—'} an admin must deploy a revision</span></div>}
+      {s.rollout_frozen && <Notice tone="error" role="alert" title="Automatic updates stopped after a failed rollback">An admin must deploy a revision to continue.</Notice>}
       <GrantState s={s} />
-      <Stats>
-        <Stat title="Health" value={<StatusBadge text={s.health ?? 'unknown'} />} desc={`state ${s.state}`} />
-        <Stat title="Ready" value={`${r}/${d}`} desc="replicas ready" figure={<Radial value={d ? (r / d) * 100 : 0} label="Replicas ready" />} />
-        <Stat title="Target" value={s.target ?? '—'} desc={s.runtime} />
-        <Stat title="Desired revision" value={s.desired_revision ?? '—'} desc="deployed on apply" />
-      </Stats>
-      <Tabs label="Stack sections" value={tab} onChange={setTab} tabs={[['overview', 'Overview'], ['revisions', 'Revisions'], ['deployments', 'Deployments'], ['audit', 'Audit'], ['settings', 'Settings']]}>
+      <Summary s={s} />
+      <Tabs label="Stack sections" value={tab} onChange={setTab} tabs={[['overview', 'Overview', 'home'], ['revisions', 'Revisions', 'document'], ['deployments', 'Deployments', 'deploy'], ['audit', 'Audit', 'list'], ['settings', 'Settings', 'sliders']]}>
         {tab === 'overview' && <>
-          <h2 className="mt-0">Workloads</h2>
-          {s.services?.length ? <Table label="Workloads" head={['Workload', 'Ready', 'Image', 'Digest']}>{s.services.map((v) => <Workload key={`${v.kind}/${v.name}`} s={v} />)}</Table> : <Empty>No workloads observed.</Empty>}
-          {running && <section aria-labelledby="h-roll"><h2 id="h-roll">Rollout in progress</h2>
-            {running.rollout!.workloads!.map((w) => <p key={`${w.kind}/${w.name}`}>
-              <label className="flex flex-wrap items-center gap-2">{w.kind}/{w.name} {w.ready ?? 0}/{w.desired ?? 0} <progress className="progress progress-primary w-56" value={w.ready ?? 0} max={Math.max(w.desired ?? 0, 1)} /></label></p>)}</section>}
-          <h2>Drift</h2>
-          {s.drift?.length ? <ul className="list bg-base-100 rounded-box border border-base-300">{s.drift.map((x, i) => <li key={i} className="list-row"><span className="badge badge-warning">drift</span><span>{x.kind}: {x.message}</span></li>)}</ul> : <p>No drift.</p>}
-          <h2>Digest updates available</h2>
-          {s.digest_status?.updates?.length ? <ul className="list bg-base-100 rounded-box border border-base-300">{s.digest_status.updates.map((u, i) => <li key={i} className="list-row">{u.workload}/{u.container}: {u.current ?? 'unknown'} {'→'} {u.available}</li>)}</ul> : <p>None{s.digest_status?.checked_at && <> (checked {when(s.digest_status.checked_at)})</>}.</p>}
-          <h2>Recent activity</h2>
-          <Q q={deps}>{(v) => v.items.length ? <DeploymentHistory items={v.items.slice(0, 5)} /> : <p>No deployments yet.</p>}</Q>
+          <SectionCard flush icon="cube" title="Workloads" subtitle="Live from the cluster">
+            <div className="px-5 pb-5">{s.services?.length ? <DataTable label="Workloads" columns={WORKLOAD_COLUMNS} rows={s.services} rowKey={(v) => `${v.kind}/${v.name}`} rowSig={(v) => JSON.stringify([v.ready_replicas, v.desired_replicas, v.image_ref, v.state])} />
+              : <EmptyState icon="cube" hint="Workloads appear once the first revision is deployed.">No workloads observed.</EmptyState>}</div>
+          </SectionCard>
+          {running && <SectionCard icon="refresh" title="Rollout in progress" subtitle={`Deployment ${running.id}`}>
+            <Stepper label="Rollout steps" steps={rollSteps(running.rollout?.state)} />
+            <div className="grid gap-3 sm:grid-cols-2">{running.rollout!.workloads!.map((w) => <label key={`${w.kind}/${w.name}`} className="flex flex-col gap-1 text-sm">
+              <span className="flex justify-between"><span>{w.kind}/{w.name}</span><span>{w.ready ?? 0}/{w.desired ?? 0}</span></span>
+              <progress className="progress progress-primary w-full" value={w.ready ?? 0} max={Math.max(w.desired ?? 0, 1)} /></label>)}</div>
+          </SectionCard>}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <SectionCard icon="drift" title="Drift" subtitle="Where the cluster differs from the desired revision">
+              {s.drift?.length ? <div className="flex flex-col gap-2">{s.drift.map((x, i) => <Notice key={i} tone="warning" title={x.kind}>{x.message}</Notice>)}</div>
+                : <Notice tone="success">No drift. The cluster matches the desired revision.</Notice>}
+            </SectionCard>
+            <SectionCard icon="refresh" title="Digest updates available">
+              {s.digest_status?.updates?.length ? <div className="flex flex-col gap-2">{s.digest_status.updates.map((u, i) => <Notice key={i} tone="info">{u.workload}/{u.container}: {u.current ?? 'unknown'} {'→'} {u.available}</Notice>)}</div>
+                : <Notice tone="info">None{s.digest_status?.checked_at && <> (checked {when(s.digest_status.checked_at)})</>}.</Notice>}
+            </SectionCard>
+          </div>
+          <SectionCard icon="clock" title="Recent activity">
+            <Q q={deps} fallback="text">{(v) => v.items.length ? <DeploymentHistory items={v.items.slice(0, 5)} /> : <EmptyState icon="deploy" hint="Deploy a revision to see it here.">No deployments yet.</EmptyState>}</Q>
+          </SectionCard>
         </>}
-        {tab === 'revisions' && <>
-          <h2 className="mt-0">Revisions</h2>
-          <Q q={revs} fallback="table">{(v) => v.items.length ? <>
-            <ul className="list bg-base-100 rounded-box border border-base-300">{v.items.slice((revPage - 1) * REV_PAGE, revPage * REV_PAGE).map((x) =>
-              <li key={x.number} className="list-row items-center"><div><Link to={`/n/${ns}/s/${stack}/revisions/${x.number}`}>Revision {x.number}</Link></div><ProfileBadge profile={x.safety_profile} /></li>)}</ul>
+        {tab === 'revisions' && <SectionCard icon="document" title="Revisions">
+          <Q q={revs} fallback="text">{(v) => v.items.length ? <>
+            <ul className="list">{v.items.slice((revPage - 1) * REV_PAGE, revPage * REV_PAGE).map((x) =>
+              <li key={x.number} className="list-row items-center px-0"><span className="grid place-items-center size-9 rounded-box bg-primary/10 text-primary"><Icon name="document" className="size-5" /></span>
+                <div className="list-col-grow"><Link to={`/n/${ns}/s/${stack}/revisions/${x.number}`} className="font-medium">Revision {x.number}</Link></div><ProfileBadge profile={x.safety_profile} /></li>)}</ul>
             <Pager page={revPage} pages={Math.ceil(v.items.length / REV_PAGE)} onPage={setRevPage} /></>
-            : <Empty to={`/n/${ns}/s/${stack}/revisions/new`} cta="Create the first revision">No revisions yet.</Empty>}</Q>
-        </>}
-        {tab === 'deployments' && <>
-          <h2 className="mt-0">Recent deployments</h2>
-          <Q q={deps} fallback="table">{(v) => v.items.length ? <DeploymentRows items={v.items.slice(0, 10)} /> : <Empty>No deployments yet.</Empty>}</Q>
-        </>}
-        {tab === 'audit' && <AuditFeed namespace={ns} />}
+            : <EmptyState icon="document" to={`/n/${ns}/s/${stack}/revisions/new`} cta="Create the first revision" hint="A revision is a saved, policy-checked set of manifests.">No revisions yet.</EmptyState>}</Q>
+        </SectionCard>}
+        {tab === 'deployments' && <SectionCard flush icon="deploy" title="Recent deployments">
+          <div className="px-5 pb-5"><Q q={deps} fallback="table">{(v) => v.items.length ? <DeploymentRows items={v.items.slice(0, 10)} /> : <EmptyState icon="deploy">No deployments yet.</EmptyState>}</Q></div>
+        </SectionCard>}
+        {tab === 'audit' && <SectionCard icon="list" title="Audit"><AuditFeed namespace={ns} /></SectionCard>}
         {tab === 'settings' && <StackActions s={s} />}
       </Tabs>
-    </> }}</Q>
+    </Page>}</Q>
   )
-}
-
-// Two manifests side by side with the daisyUI diff slider (text only, UI-003).
-function DiffView({ a, b, an, bn }: { a: string; b: string; an: number; bn: number }) {
-  if (a === b) return <p>No changes between revision {an} and revision {bn}.</p>
-  const pane = (t: string) => <div className="bg-base-200 text-base-content p-4 overflow-auto"><pre className="text-sm">{t}</pre></div>
-  return <>
-    <p className="text-sm">Drag the handle to wipe between revision {an} (left) and revision {bn} (right).</p>
-    <figure className="diff aspect-16/9 rounded-box border border-base-300" role="group" aria-label={`Manifest diff, revision ${an} against revision ${bn}`}>
-      <div className="diff-item-1">{pane(a)}</div><div className="diff-item-2">{pane(b)}</div><div className="diff-resizer" />
-    </figure>
-  </>
 }
 
 export function Revision() {
@@ -136,28 +157,30 @@ export function Revision() {
     queryFn: () => get<S['Revision']>(`/namespaces/${ns}/stacks/${stack}/revisions/${base}`, { path: { ns, stack, n: base } }) })
   useTitle(`Revision ${n} — ${stack}`)
   const text = (r?: S['Revision']) => r?.manifests_input ?? r?.compose_input ?? ''
-  const acc = (title: string, children: React.ReactNode, open = false) =>
-    <details className="collapse collapse-arrow join-item border border-base-300 bg-base-100" open={open}>
-      <summary className="collapse-title text-lg font-semibold">{title}</summary><div className="collapse-content">{children}</div></details>
+  const sect = (title: string, icon: 'shield' | 'cube' | 'document' | 'drift', children: ReactNode, open = false) =>
+    <SectionCard collapsible defaultOpen={open} icon={icon} title={title}>{children}</SectionCard>
   return (
-    <Q q={q} fallback="page">{(r) => <>
-      <ProdRibbon tier={st.data?.environment_tier} />
-      <PageHeader title={`Revision ${r.number}`} badges={<ProfileBadge profile={r.safety_profile} large />}
-        actions={st.data && <button className="btn btn-primary btn-sm" disabled={!access.allowed} onClick={() => setDeploying(true)}>Deploy revision {r.number}</button>} />
+    <Q q={q} fallback="page">{(r) => <Page>
+      <PageHeader icon="document" title={`Revision ${r.number}`} subtitle={<>of <Link to={`/n/${ns}/s/${stack}`}>{stack}</Link> {'·'} created {when(r.created_at)} by {r.created_by}</>}
+        badges={<>{st.data && <TierBadge tier={st.data.environment_tier} large />}<ProfileBadge profile={r.safety_profile} large /><span className="badge badge-lg badge-outline">origin {r.origin}</span></>}
+        actions={<>
+          <Link className="btn btn-sm" to={`/n/${ns}/s/${stack}`}><Icon name="arrow-left" className="size-4" />Back to {stack}</Link>
+          {st.data && (access.allowed ? <button className="btn btn-primary btn-sm" onClick={() => setDeploying(true)}><Icon name="deploy" className="size-4" />Deploy revision {r.number}</button>
+            : <Tip tip="Prod needs an active access grant. Request one first." pos="left"><button className="btn btn-primary btn-sm" disabled>Deploy revision {r.number}</button></Tip>)}</>} />
       {st.data && <>
+        <TierBanner tier={st.data.environment_tier} />
         <GrantState s={st.data} />
         {deploying && <DeployDialog s={st.data} r={r} onClose={() => setDeploying(false)} />}</>}
-      <p>origin {r.origin} {'·'} created {when(r.created_at)} by {r.created_by}</p>
-      <p><Link to={`/n/${ns}/s/${stack}`}>Back to {stack}</Link></p>
-      <div className="join join-vertical w-full">
-        {acc('Policy result', <>
-          {r.policy_result?.violations?.length ? <ul className="list">{r.policy_result.violations.map((v, i) => <li key={i} className="list-row"><span className="badge badge-error">violation</span><span>{v.rule}: {v.message}</span></li>)}</ul> : <p>{r.policy_result?.allowed === false ? 'Not allowed.' : 'No violations.'}</p>}
-          {r.policy_result?.approval_reasons?.length ? <div className="alert alert-warning"><span>Needs approval: {r.policy_result.approval_reasons.join('; ')}</span></div> : null}</>, true)}
-        {acc('Objects', r.inventory?.length ? <ul className="list">{r.inventory.map((o, i) => <li key={i} className="list-row">{o.kind}/{o.name}</li>)}</ul> : <p>None.</p>)}
-        {acc('Manifests', <MockCode text={text(r)} label="Manifests" />, true)}
-        {base != null && acc(`Changes since revision ${base}`, <Q q={prev}>{(p) => <DiffView a={text(p)} b={text(r)} an={base} bn={r.number!} />}</Q>)}
+      <div className="flex flex-col gap-3">
+        {sect('Policy result', 'shield', <>
+          {r.policy_result?.violations?.length ? <div className="flex flex-col gap-2">{r.policy_result.violations.map((v, i) => <Notice key={i} tone="error" title={v.rule}>{v.message}</Notice>)}</div>
+            : <Notice tone={r.policy_result?.allowed === false ? 'error' : 'success'}>{r.policy_result?.allowed === false ? 'Not allowed.' : 'No violations.'}</Notice>}
+          {r.policy_result?.approval_reasons?.length ? <Notice tone="warning">Needs approval: {r.policy_result.approval_reasons.join('; ')}</Notice> : null}</>, true)}
+        {sect('Objects', 'cube', r.inventory?.length ? <ul className="flex flex-wrap gap-2">{r.inventory.map((o, i) => <li key={i} className="badge badge-lg badge-ghost font-mono">{o.kind}/{o.name}</li>)}</ul> : <p>None.</p>)}
+        {sect('Manifests', 'document', <MockCode text={text(r)} label="Manifests" />, true)}
+        {base != null && sect(`Changes since revision ${base}`, 'drift', <Q q={prev} fallback="text">{(p) => <DiffView a={text(p)} b={text(r)} an={base} bn={r.number!} />}</Q>)}
       </div>
-    </>}</Q>
+    </Page>}</Q>
   )
 }
 
@@ -174,41 +197,37 @@ export function Deployment() {
       const at = STATE_STEP[d.status ?? ''] ?? -1
       const last = d.status === 'failed' ? 'Failed' : 'Succeeded'
       const roll = d.rollout?.state === 'rolling_back' || d.rollout?.result === 'rolled_back' || d.rollout?.result === 'rollback_failed'
-      return <>
-        <ProdRibbon tier={d.environment_tier} />
-        <PageHeader title={`Deployment ${d.id}`} badges={<><TierBadge tier={d.environment_tier} large /><ProfileBadge profile={d.safety_profile} large /></>} />
-        <p>Status: <StatusBadge text={d.status} />
-          {d.grant_bypass && <> {'·'} grant bypassed (break-glass)</>}{d.grant_id && <> {'·'} grant {d.grant_id}</>}</p>
-        <ul className="steps w-full my-4" aria-label="Deployment state">
-          {['Queued', 'Running', last].map((t, i) => <li key={t} className={`step ${i <= at ? (i === 2 && d.status === 'failed' ? 'step-error' : i === 2 ? 'step-success' : 'step-primary') : ''}`} aria-current={i === at ? 'step' : undefined}>{t}</li>)}
-        </ul>
-        {at < 0 && <p>This deployment is {d.status?.replace('_', ' ')}.</p>}
-        {roll && <>
-          <div className="alert alert-warning my-2" role="status"><span>{d.rollout?.state === 'rolling_back' ? `Rolling back to revision ${d.rollout.rolled_back_to ?? '?'}` : `Rollout rolled back to revision ${d.rollout?.rolled_back_to ?? '?'}`}</span></div>
-          <ul className="steps w-full my-4" aria-label="Rollback state">
-            <li className="step step-error">Rollout failed</li>
-            <li className={`step ${d.rollout?.state === 'rolling_back' ? 'step-warning' : 'step-primary'}`}>Rolling back</li>
-            <li className={`step ${d.rollout?.result === 'rolled_back' ? 'step-success' : d.rollout?.result === 'rollback_failed' ? 'step-error' : ''}`}>{d.rollout?.result === 'rollback_failed' ? 'Rollback failed' : 'Restored'}</li>
-          </ul></>}
-        {d.rollout?.result && <p>Rollout result: {d.rollout.result}</p>}
-        <h2>Timeline</h2>
-        <ul className="timeline timeline-vertical timeline-compact timeline-snap-icon">
-          {([[`Requested by ${d.requested_by}${d.reason ? `: ${d.reason}` : ''}`, null], [d.approved_by && `Approved by ${d.approved_by}`, null], [d.started_at && `Started ${when(d.started_at)}`, null],
-            [d.finished_at && `Finished ${when(d.finished_at)} — ${d.status}`, d.status === 'succeeded' ? 'success' : 'error']] as [string | null | undefined, string | null][])
-            .filter(([t]) => t).map(([t, tone], i, all) => <li key={t}>{i > 0 && <hr />}
-              <div className="timeline-middle"><span className={`status ${tone === 'success' ? 'status-success' : tone === 'error' ? 'status-error' : 'status-primary'}`} aria-hidden="true" /></div>
-              <div className="timeline-end timeline-box my-2">{t}</div>{i < all.length - 1 && <hr />}</li>)}
-        </ul>
-        <DeploymentActions d={d} />
-        {d.error && <div className="alert alert-error my-2" role="alert"><span>Error: {d.error}</span></div>}
-        <h2>Rollout</h2>
-        {d.rollout?.workloads?.length ? <Table label="Rollout" head={['Workload', 'Desired', 'Updated', 'Ready', 'Available', 'Reason']}>
-          {d.rollout.workloads.map((w) => <tr key={`${w.kind}/${w.name}`}><th scope="row">{w.kind}/{w.name}</th><td>{w.desired}</td><td>{w.updated}</td>
-            <td>{w.ready} <progress className="progress progress-primary w-16 align-middle" value={w.ready ?? 0} max={Math.max(w.desired ?? 0, 1)} aria-hidden="true" /></td><td>{w.available}</td><td>{w.reason ?? ''}</td></tr>)}</Table> : <p>No rollout data.</p>}
-        <details className="collapse collapse-arrow bg-base-200 mt-4" open>
-          <summary className="collapse-title text-xl font-semibold">Output</summary>
-          <div className="collapse-content"><MockCode text={out.data?.output ?? ''} label="Deployment output" prefix="$" /></div></details>
-      </>
+      const mainSteps = ['Queued', 'Running', last].map((label, i): { label: string; state: StepState } => ({ label,
+        state: i > at ? 'todo' : i === 2 ? (d.status === 'failed' ? 'error' : 'success') : i === at ? 'current' : 'done' }))
+      const events = ([[`Requested by ${d.requested_by}${d.reason ? `: ${d.reason}` : ''}`, 'primary'], [d.approved_by && `Approved by ${d.approved_by}`, 'success'], [d.started_at && `Started ${when(d.started_at)}`, 'primary'],
+        [d.finished_at && `Finished ${when(d.finished_at)} — ${d.status}`, d.status === 'succeeded' ? 'success' : 'error']] as [string | null | undefined, Accent][]).filter(([t]) => t) as [string, Accent][]
+      return <Page>
+        <PageHeader icon="deploy" title={`Deployment ${d.id}`} subtitle={<>{d.namespace && <><Link to={`/n/${d.namespace}`}>{d.namespace}</Link>{d.stack && <>/<Link to={`/n/${d.namespace}/s/${d.stack}`}>{d.stack}</Link></>} {'·'} </>}{d.action}{d.revision != null && <> of revision {d.revision}</>}</>}
+          badges={<><TierBadge tier={d.environment_tier} large /><ProfileBadge profile={d.safety_profile} large /><StatusBadge text={d.status} />{d.grant_id && <span className="badge badge-outline">grant {d.grant_id}</span>}</>}
+          actions={<DeploymentActions d={d} />} />
+        <TierBanner tier={d.environment_tier} />
+        {d.grant_bypass && <Notice tone="warning">Ran with grant bypassed (break-glass session).</Notice>}
+        {d.error && <Notice tone="error" role="alert" title="Deployment failed">Error: {d.error}</Notice>}
+        {roll && <Notice tone="warning" title={d.rollout?.state === 'rolling_back' ? 'Rolling back' : 'Rolled back'}>{d.rollout?.state === 'rolling_back' ? `Rolling back to revision ${d.rollout.rolled_back_to ?? '?'}` : `Rollout rolled back to revision ${d.rollout?.rolled_back_to ?? '?'}`}</Notice>}
+        <SectionCard icon="bolt" title="Progress">
+          <Stepper label="Deployment state" steps={mainSteps} />
+          {at < 0 && <p className="text-sm">This deployment is {d.status?.replace('_', ' ')}.</p>}
+          {roll && <Stepper label="Rollback state" steps={[{ label: 'Rollout failed', state: 'error' }, { label: 'Rolling back', state: d.rollout?.state === 'rolling_back' ? 'warning' : 'done' },
+            { label: d.rollout?.result === 'rollback_failed' ? 'Rollback failed' : 'Restored', state: d.rollout?.result === 'rolled_back' ? 'success' : d.rollout?.result === 'rollback_failed' ? 'error' : 'todo' }]} />}
+          {d.rollout?.result && <p>Rollout result: {d.rollout.result}</p>}
+        </SectionCard>
+        <div className="grid gap-5 lg:grid-cols-3">
+          <SectionCard icon="clock" title="Timeline" className="lg:col-span-1"><Timeline label="Deployment timeline" items={events.map(([t, tone], i) => ({ id: i, tone, content: t }))} /></SectionCard>
+          <SectionCard flush icon="refresh" title="Rollout" className="lg:col-span-2">
+            <div className="px-5 pb-5">{d.rollout?.workloads?.length ? <DataTable label="Rollout" rows={d.rollout.workloads} rowKey={(w) => `${w.kind}/${w.name}`} columns={[
+              { key: 'w', header: 'Workload', rowHeader: true, cell: (w) => <>{w.kind}/{w.name}</> }, { key: 'd', header: 'Desired', cell: (w) => w.desired }, { key: 'u', header: 'Updated', cell: (w) => w.updated },
+              { key: 'r', header: 'Ready', cell: (w) => <>{w.ready} <progress className="progress progress-primary w-16 align-middle" value={w.ready ?? 0} max={Math.max(w.desired ?? 0, 1)} aria-hidden="true" /></> },
+              { key: 'a', header: 'Available', hideBelow: 'sm', cell: (w) => w.available }, { key: 'x', header: 'Reason', hideBelow: 'md', cell: (w) => w.reason ?? '' }]} />
+              : <EmptyState icon="refresh">No rollout data.</EmptyState>}</div>
+          </SectionCard>
+        </div>
+        <SectionCard collapsible defaultOpen icon="document" title="Output"><MockCode text={out.data?.output ?? ''} label="Deployment output" prefix="$" /></SectionCard>
+      </Page>
     }}</Q>
   )
 }

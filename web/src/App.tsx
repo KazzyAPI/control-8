@@ -9,8 +9,23 @@ import { NewRevision, RequestAccess } from './screens/Write'
 import { Audit, Grants, Targets } from './screens/Feeds'
 import { SessionEndedModal, ConnectionIndicator, StaleBanner } from './components/StreamStatus'
 import { Breadcrumbs, BottomDock, Footer, Sidebar, ThemeSwitcher, UserMenu, useNavCounts } from './components/Nav'
-import { Empty, Icon, ICONS } from './components/Parts'
+import { Icon, Notice } from './components/ui'
 import Login from './screens/Login'
+import { Link } from 'react-router'
+
+// 404: daisyUI hero with a clear way back.
+function NotFound() {
+  return (
+    <div className="hero min-h-[60vh] rounded-box bg-base-200">
+      <div className="hero-content flex-col text-center gap-2">
+        <p className="text-8xl font-black text-primary" aria-hidden="true">404</p>
+        <h1 className="text-2xl font-bold">Not found</h1>
+        <p className="max-w-sm">That page does not exist, or you do not have access to it.</p>
+        <Link className="btn btn-primary mt-2" to="/"><Icon name="home" className="size-4" />Back to overview</Link>
+      </div>
+    </div>
+  )
+}
 import { useEventStream } from './events/useEventStream'
 
 function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
@@ -35,15 +50,15 @@ function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
       <div className="drawer-content flex flex-col min-h-screen min-w-0">
         <a className="skip btn btn-sm" href="#main">Skip to content</a>
         <header className="navbar bg-base-100 border-b border-base-300 sticky top-0 z-20 gap-2 min-h-14">
-          <button type="button" className="btn btn-square btn-ghost lg:hidden" aria-label="Open navigation" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}><Icon d={ICONS.menu} /></button>
+          <button type="button" className="btn btn-square btn-ghost lg:hidden" aria-label="Open navigation" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}><Icon name="menu" /></button>
           <div className="flex-1 min-w-0"><Breadcrumbs /></div>
           <ConnectionIndicator conn={conn} />
           <ThemeSwitcher />
           <UserMenu me={me} />
         </header>
-        {me.auth_method === 'break_glass' && <div className="alert alert-error rounded-none" role="status"><span>Break-glass session</span></div>}
+        {me.auth_method === 'break_glass' && <Notice tone="error" className="rounded-none py-2"><strong>Break-glass session.</strong> Every action is audited; approvals are disabled.</Notice>}
         <StaleBanner conn={conn} onRetry={retry} />
-        <main id="main" className="p-4 max-w-7xl w-full mx-auto flex-1 pb-24 lg:pb-4">
+        <main id="main" className="overflow-x-clip min-w-0 p-4 sm:p-6 max-w-7xl w-full mx-auto flex-1 pb-24 lg:pb-6">
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/n/:ns" element={<Namespace />} />
@@ -61,7 +76,7 @@ function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
             <Route path="/admin/access" element={<AdminAccess />} />
             <Route path="/admin/policy" element={<AdminPolicy />} />
             <Route path="/admin/targets" element={<Targets />} />
-            <Route path="*" element={<><h1>Not found</h1><Empty to="/" cta="Back to overview">That page does not exist.</Empty></>} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
         <Footer />
@@ -78,7 +93,7 @@ function Shell({ me }: { me: NonNullable<ReturnType<typeof useMe>['data']> }) {
 
 function Authed() {
   const { data: me, error } = useMe()
-  if (error) return <div className="alert alert-error m-4" role="alert"><span>Could not load your session: {String(error)}</span></div>
+  if (error) return <div className="p-4"><Notice tone="error" role="alert">Could not load your session: {String(error)}</Notice></div>
   if (!me) return (
     <div className="flex min-h-screen" role="status"><span className="sr-only">Loading{'…'}</span>
       <div className="hidden lg:block w-64 bg-base-200 p-6 space-y-4" aria-hidden="true"><div className="skeleton h-6 w-32" />{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-4 w-40" />)}</div>

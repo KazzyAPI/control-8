@@ -38,16 +38,19 @@
 
 /* Tailwind's preflight strips element defaults; restore a readable baseline for unclassed elements only. */
 @layer base {
-  h1 { @apply text-2xl font-bold mb-4 }
-  h2 { @apply text-xl font-semibold mt-6 mb-2 }
-  h3 { @apply text-lg font-semibold mt-4 mb-2 }
-  main p, main form { @apply my-2 }
+  h1 { @apply text-2xl font-bold }
+  h2 { @apply text-xl font-semibold }
+  h3 { @apply text-lg font-semibold }
   main ul:not([class]), main ol:not([class]) { @apply my-2; padding-inline-start: 1.5rem }
   main ul:not([class]) { list-style: disc }
   main ol:not([class]) { list-style: decimal }
   main a:not([class], .menu *) { @apply link link-primary }
   code, pre { @apply font-mono }
 }
+
+/* Sidebar active item in the theme primary colour (daisyUI default is a neutral block). */
+.menu :where(li > a.menu-active, li > a[aria-current="page"]) { background: var(--color-primary); color: var(--color-primary-content) }
+:root:not([data-theme="nord"]) .menu :where(li > a.menu-active, li > a[aria-current="page"]) { background: color-mix(in oklab, var(--color-primary) 75%, black) }
 
 /* CSP is default-src 'self' (no data: images), so daisyUI's inline data-URI masks are replaced by the same artwork as
    real files (emitted by Vite; assetsInlineLimit is 0). Without this the loaders and tooltip arrows would render as solid blocks. */

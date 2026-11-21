@@ -1,14 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { ProfileBadge, TierBadge } from '../components/Badges'
-import { PageHeader, ProdRibbon } from '../components/Parts'
+import { Btn, ConfirmDialog, FormError, FormField as Field, Icon, Modal, ModalActions, Notice, Page, PageHeader, ProfileBadge, SectionCard, TierBadge, TierBanner, ToggleRow, Tip } from '../components/ui'
 import { useGet, useProdAccess, useTitle, type S } from '../lib'
-import { ApiError, Btn, Dialog, Field, FormError, ReasonDialog, send, useAct } from '../ui'
+import { ApiError, send, useAct } from '../ui'
 import { deployErr, grantErr, lines, reqErr, revisionErr, slugErr } from '../validate'
 
 const SLUG_PATTERN = '[a-z0-9]([a-z0-9\\-]{0,61}[a-z0-9])?' // same rule as validate.ts SLUG, for the validator state
 const PROFILE_NAME: Record<string, string> = { managed_rollout: 'Managed rollout', as_is: 'As-is', parachute: 'With Parachute' }
 const profileName = (p?: string | null) => PROFILE_NAME[p ?? ''] ?? 'none'
+const PROFILE_HELP: Record<string, string> = { managed_rollout: 'Rolls out gradually, watches health, and rolls back on its own if it fails.', as_is: 'Applied exactly as written. No safety net and no automatic rollback.' }
 
 // Shared submit wrapper: shows the validation error only after the first submit attempt.
 function useForm(validate: () => string | null, run: () => Promise<unknown>) {
@@ -35,8 +35,8 @@ export function CreateAsset({ ns }: { ns: string }) {
     if (await act(() => send('POST', '/namespaces/{ns}/assets', { params: { path: { ns } }, body }), `Asset ${f.slug} created`, [['assets', ns]])) setF({ ...f, slug: '', name: '', image_repo: '' })
   })
   return (
-    <form onSubmit={form.onSubmit} noValidate aria-label="Create asset" className="card card-border bg-base-100"><div className="card-body">
-      <h3 className="card-title mt-0">Create asset</h3>
+    <form onSubmit={form.onSubmit} noValidate aria-label="Create asset" className="card card-border bg-base-100 shadow-sm"><div className="card-body gap-2 p-5">
+      <h2 className="card-title text-base"><Icon name="cube" className="size-5 text-primary" />Create asset</h2>
       <Field label="Slug" vhint="Lowercase letters, digits and dashes"><input className="input validator w-full" required pattern={SLUG_PATTERN} value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value })} /></Field>
       <Field label="Name" vhint="A name is required"><input className="input validator w-full" required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
       <Field label="Managed by"><select className="select w-full" value={f.managed_by} onChange={(e) => setF({ ...f, managed_by: e.target.value })}><option value="control8">Control 8</option><option value="argo">Argo</option></select></Field>
@@ -58,8 +58,8 @@ export function CreateStack({ ns }: { ns: string }) {
     if (s) nav(`/n/${ns}/s/${f.slug}`)
   })
   return (
-    <form onSubmit={form.onSubmit} noValidate aria-label="Create stack" className="card card-border bg-base-100"><div className="card-body">
-      <h3 className="card-title mt-0">Create stack</h3>
+    <form onSubmit={form.onSubmit} noValidate aria-label="Create stack" className="card card-border bg-base-100 shadow-sm"><div className="card-body gap-2 p-5">
+      <h2 className="card-title text-base"><Icon name="layers" className="size-5 text-primary" />Create stack</h2>
       <Field label="Slug" vhint="Lowercase letters, digits and dashes"><input className="input validator w-full" required pattern={SLUG_PATTERN} value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value })} /></Field>
       <Field label="Asset" vhint="Choose an asset"><select className="select validator w-full" required value={f.asset} onChange={(e) => setF({ ...f, asset: e.target.value })}><option value="">Choose…</option>
         {(assets.data?.items ?? []).map((a) => <option key={a.slug} value={a.slug}>{a.name}</option>)}</select></Field>
@@ -80,8 +80,9 @@ export function ApproverGroup({ ns, current }: { ns: string; current?: string | 
     await act(() => send('PATCH', '/namespaces/{ns}', { params: { path: { ns } }, body: { approver_group: v.trim() } }), 'Approver group saved', [['namespace', ns]])
   })
   return (
-    <form onSubmit={form.onSubmit} noValidate aria-label="Approver group" className="card card-border bg-base-100 max-w-xl mb-4"><div className="card-body">
-      <Field label="Approver group" vhint="An approver group is required"><input className="input validator w-full" required value={v} onChange={(e) => setV(e.target.value)} /></Field>
+    <form onSubmit={form.onSubmit} noValidate aria-label="Approver group" className="card card-border bg-base-100 shadow-sm"><div className="card-body gap-2 p-5">
+      <h2 className="card-title text-base"><Icon name="user" className="size-5 text-primary" />Approver group</h2>
+      <Field label="Approver group" hint="Members of this group approve prod access for the namespace." vhint="An approver group is required"><input className="input validator w-full" required value={v} onChange={(e) => setV(e.target.value)} /></Field>
       <FormError msg={form.error} />
       <div className="card-actions"><Btn type="submit" busy={form.busy} className="btn btn-primary btn-sm">Save approver group</Btn></div>
     </div></form>
@@ -117,20 +118,25 @@ export function NewRevision() {
     }
   })
   return (
-    <>
-      <PageHeader title="New revision" actions={<Link className="btn btn-sm" to={`/n/${ns}/s/${stack}`}>Back to {stack}</Link>} />
-      <form onSubmit={form.onSubmit} noValidate aria-label="New revision" className="max-w-3xl">
-        <Field label="Safety profile" vhint="Choose a safety profile"><select className="select validator w-full" required value={f.profile} onChange={(e) => setF({ ...f, profile: e.target.value })}>
-          <option value="">Choose…</option><option value="managed_rollout">Managed rollout</option><option value="as_is">As-is — no safety net</option></select></Field>
-        <Field label="Manifests (YAML)" vhint="Manifests are required"><textarea className="textarea validator w-full font-mono" required rows={14} value={f.manifests} onChange={(e) => setF({ ...f, manifests: e.target.value })} spellCheck={false} /></Field>
-        <Field label="Rollout timeout in seconds (optional)" vhint="Digits only"><input className="input validator w-full" inputMode="numeric" pattern="[0-9]*" value={f.timeout} onChange={(e) => setF({ ...f, timeout: e.target.value })} /></Field>
-        <fieldset className="fieldset"><label className="label text-base-content gap-3"><input type="checkbox" className="toggle toggle-sm" checked={f.digest_poll} onChange={(e) => setF({ ...f, digest_poll: e.target.checked })} /> Follow image digests (managed rollout only)</label></fieldset>
-        <Field label="Database workloads (comma separated, optional)"><input className="input w-full" value={f.dbs} onChange={(e) => setF({ ...f, dbs: e.target.value })} /></Field>
+    <Page>
+      <PageHeader icon="document" title="New revision" subtitle={<>Manifests for <Link to={`/n/${ns}/s/${stack}`}>{stack}</Link> are checked against policy when you create the revision; nothing is deployed yet.</>}
+        actions={<Link className="btn btn-sm" to={`/n/${ns}/s/${stack}`}><Icon name="arrow-left" className="size-4" />Back to {stack}</Link>} />
+      <form onSubmit={form.onSubmit} noValidate aria-label="New revision" className="flex flex-col gap-5 max-w-3xl">
+        <SectionCard icon="shield" title="How to deploy">
+          <Field label="Safety profile" vhint="Choose a safety profile" hint="Managed rollout watches health and rolls back on its own. As-is applies exactly what you wrote."><select className="select validator w-full" required value={f.profile} onChange={(e) => setF({ ...f, profile: e.target.value })}>
+            <option value="">Choose…</option><option value="managed_rollout">Managed rollout</option><option value="as_is">As-is — no safety net</option></select></Field>
+          <Field label="Rollout timeout in seconds (optional)" vhint="Digits only"><input className="input validator w-full" inputMode="numeric" pattern="[0-9]*" value={f.timeout} onChange={(e) => setF({ ...f, timeout: e.target.value })} /></Field>
+          <ToggleRow label="Follow image digests" hint="Managed rollout only. Reports newer digests; prod stacks never update on their own." checked={f.digest_poll} onChange={(v) => setF({ ...f, digest_poll: v })} />
+        </SectionCard>
+        <SectionCard icon="document" title="Manifests">
+          <Field label="Manifests (YAML)" vhint="Manifests are required"><textarea className="textarea validator w-full font-mono" required rows={14} value={f.manifests} onChange={(e) => setF({ ...f, manifests: e.target.value })} spellCheck={false} /></Field>
+          <Field label="Database workloads (comma separated, optional)" hint="Protected: changes to these can need approval."><input className="input w-full" value={f.dbs} onChange={(e) => setF({ ...f, dbs: e.target.value })} /></Field>
+        </SectionCard>
         <FormError msg={form.error} />
-        {violations.length > 0 && <div role="alert" className="alert alert-error alert-vertical items-start my-2"><p className="my-0 font-semibold">Policy violations:</p><ul className="list">{violations.map((v, i) => <li key={i} className="list-row">{v.rule}{v.service && ` (${v.service})`}: {v.message}</li>)}</ul></div>}
-        <Btn type="submit" busy={form.busy} className="btn btn-primary mt-2">Create revision</Btn>
+        {violations.length > 0 && <Notice tone="error" role="alert" title="Policy violations"><ul className="list">{violations.map((v, i) => <li key={i} className="list-row px-0">{v.rule}{v.service && ` (${v.service})`}: {v.message}</li>)}</ul></Notice>}
+        <div><Btn type="submit" busy={form.busy} className="btn btn-primary">Create revision</Btn></div>
       </form>
-    </>
+    </Page>
   )
 }
 
@@ -149,22 +155,24 @@ export function DeployDialog({ s, r, onClose }: { s: S['Stack']; r: S['Revision'
   })
   const changed = s.state === 'active' && s.safety_profile && r.safety_profile && s.safety_profile !== r.safety_profile
   return (
-    <Dialog title={`Deploy revision ${r.number}`} onClose={onClose}>
-      <form onSubmit={form.onSubmit} noValidate>
-        <p className="flex flex-wrap gap-2"><TierBadge tier={s.environment_tier} large /> <ProfileBadge profile={r.safety_profile} large /></p>
-        {prod && <ProdRibbon tier="prod" />}
-        {changed && <div className="alert alert-warning my-2"><span className="font-semibold">Safety profile changes: {profileName(s.safety_profile)} {'→'} {profileName(r.safety_profile)}</span></div>}
-        <fieldset className="fieldset"><legend className="fieldset-legend">Safety profile of this revision</legend>
-          {(['managed_rollout', 'as_is'] as const).map((p) => <label key={p} className="label text-base-content gap-2"><input type="radio" name="profile" className="radio radio-sm" checked={f.picked === p} onChange={() => setF({ ...f, picked: p })} /> {profileName(p)}</label>)}
+    <Modal title={`Deploy revision ${r.number}`} icon="deploy" onClose={onClose} wide>
+      <form onSubmit={form.onSubmit} noValidate className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2"><TierBadge tier={s.environment_tier} large /> <ProfileBadge profile={r.safety_profile} large /> <span className="text-sm">to {s.namespace}/{s.slug} on {s.target}</span></div>
+        <TierBanner tier={s.environment_tier} />
+        {changed && <Notice tone="warning" title={`Safety profile changes: ${profileName(s.safety_profile)} → ${profileName(r.safety_profile)}`}>The new revision is deployed the new way from now on.</Notice>}
+        <fieldset className="fieldset"><legend className="fieldset-legend">Confirm the safety profile of this revision</legend>
+          <div className="grid gap-2 sm:grid-cols-2">{(['managed_rollout', 'as_is'] as const).map((p) => <label key={p} className="flex items-start gap-3 rounded-box border border-base-300 p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+            <input type="radio" name="profile" className="radio radio-primary radio-sm mt-1" aria-label={profileName(p)} aria-describedby={`pf-${p}`} checked={f.picked === p} onChange={() => setF({ ...f, picked: p })} />
+            <span><span className="block font-semibold">{profileName(p)}</span><span id={`pf-${p}`} className="block text-sm">{PROFILE_HELP[p]}</span></span></label>)}</div>
         </fieldset>
-        {r.safety_profile === 'as_is' && <fieldset className="fieldset"><label className="label text-base-content gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={f.ack} onChange={(e) => setF({ ...f, ack: e.target.checked })} /> I understand there is no automatic rollback</label></fieldset>}
+        {r.safety_profile === 'as_is' && <label className="flex items-start gap-3 rounded-box bg-warning/15 p-3 cursor-pointer"><input type="checkbox" className="checkbox checkbox-warning checkbox-sm mt-0.5" checked={f.ack} onChange={(e) => setF({ ...f, ack: e.target.checked })} /><span className="text-sm">I understand there is no automatic rollback</span></label>}
         {prod && <Field label={<>Type <code>{s.namespace}</code> to confirm this production deploy</>} vhint={`Type ${s.namespace} exactly`}>
           <input className="input validator w-full" required pattern={s.namespace} value={f.typed} onChange={(e) => setF({ ...f, typed: e.target.value })} autoComplete="off" /></Field>}
         <Field label="Reason (optional)"><input className="input w-full" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} /></Field>
         <FormError msg={form.error} />
-        <div className="modal-action"><Btn type="submit" busy={form.busy} className={`btn btn-sm ${prod ? 'btn-error' : 'btn-primary'}`}>Deploy rev {r.number} to {prod ? 'PROD' : 'NON-PROD'} {'—'} {profileName(r.safety_profile)}</Btn> <button type="button" className="btn btn-sm" onClick={onClose}>Cancel</button></div>
+        <ModalActions><button type="button" className="btn btn-sm" onClick={onClose}>Cancel</button><Btn type="submit" busy={form.busy} className={`btn btn-sm ${prod ? 'btn-error' : 'btn-primary'}`}>Deploy rev {r.number} to {prod ? 'PROD' : 'NON-PROD'} {'—'} {profileName(r.safety_profile)}</Btn></ModalActions>
       </form>
-    </Dialog>
+    </Modal>
   )
 }
 
@@ -181,18 +189,18 @@ export function ImageUpdateDialog({ s, workload, container, current, onClose }: 
     if (d) nav(`/deployments/${d.id}`)
   })
   return (
-    <Dialog title={`Update image of ${workload} / ${container}`} onClose={onClose}>
-      <form onSubmit={form.onSubmit} noValidate>
-        <p className="flex flex-wrap gap-2"><TierBadge tier={s.environment_tier} large /> <ProfileBadge profile={s.safety_profile} large /></p>
-        {prod && <ProdRibbon tier="prod" />}
+    <Modal title={`Update image of ${workload} / ${container}`} icon="refresh" onClose={onClose}>
+      <form onSubmit={form.onSubmit} noValidate className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2"><TierBadge tier={s.environment_tier} large /> <ProfileBadge profile={s.safety_profile} large /></div>
+        <TierBanner tier={s.environment_tier} />
         <Field label="New image (same repository)" vhint="An image is required"><input className="input validator w-full" required value={f.image} onChange={(e) => setF({ ...f, image: e.target.value })} /></Field>
         <Field label="Reason" vhint="A reason is required"><input className="input validator w-full" required value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} /></Field>
         {prod && <Field label={<>Type <code>{s.namespace}</code> to confirm</>} vhint={`Type ${s.namespace} exactly`}>
           <input className="input validator w-full" required pattern={s.namespace} value={f.typed} onChange={(e) => setF({ ...f, typed: e.target.value })} autoComplete="off" /></Field>}
         <FormError msg={form.error} />
-        <div className="modal-action"><Btn type="submit" busy={form.busy} className={`btn btn-sm ${prod ? 'btn-error' : 'btn-primary'}`}>Update image{prod ? ' on PROD' : ''}</Btn> <button type="button" className="btn btn-sm" onClick={onClose}>Cancel</button></div>
+        <ModalActions><button type="button" className="btn btn-sm" onClick={onClose}>Cancel</button><Btn type="submit" busy={form.busy} className={`btn btn-sm ${prod ? 'btn-error' : 'btn-primary'}`}>Update image{prod ? ' on PROD' : ''}</Btn></ModalActions>
       </form>
-    </Dialog>
+    </Modal>
   )
 }
 
@@ -206,23 +214,28 @@ export function StackActions({ s }: { s: S['Stack'] }) {
   const canImage = s.runtime === 'kubernetes' && s.safety_profile === 'managed_rollout' && s.state === 'active'
   const rows = canImage ? (s.services ?? []).flatMap((v) => (v.containers ?? []).map((c) => ({ workload: v.name!, container: c.name!, image: c.image ?? '' }))) : []
   return (
-    <section aria-labelledby="h-act">
-      <h2 id="h-act" className="mt-0">Actions</h2>
-      <div className="flex flex-wrap gap-2 my-2"><Link className="btn btn-sm btn-primary" to={`/n/${s.namespace}/s/${s.slug}/revisions/new`}>New revision</Link>
-        <button className="btn btn-sm btn-outline btn-error" disabled={!draft && !a.allowed} onClick={() => setDlg('teardown')}>{draft ? 'Delete draft' : 'Teardown'}</button>
-      </div>
-      {rows.length > 0 && <ul className="list bg-base-100 rounded-box border border-base-300">{rows.map((r) => <li key={`${r.workload}/${r.container}`} className="list-row items-center"><div>{r.workload} / {r.container}: {r.image}</div>
-        <button className="btn btn-sm" disabled={!a.allowed} aria-label={`Update image of ${r.workload} ${r.container}`} onClick={() => setDlg(r)}>Update image</button></li>)}</ul>}
-      {dlg === 'teardown' && <ReasonDialog title={draft ? 'Delete draft stack' : `Tear down ${s.slug}`} submit={draft ? 'Delete draft' : 'Tear down'}
+    <div className="flex flex-col gap-5">
+      <SectionCard icon="plus" title="Actions" subtitle="Create a revision, or retire this stack.">
+        <div className="flex flex-wrap gap-2"><Link className="btn btn-sm btn-primary" to={`/n/${s.namespace}/s/${s.slug}/revisions/new`}><Icon name="plus" className="size-4" />New revision</Link>
+          <Tip tip={!draft && !a.allowed ? 'Prod needs an active access grant.' : draft ? 'Remove this draft stack.' : 'Remove the workloads of this stack. Volumes are never deleted.'}>
+            <button className="btn btn-sm btn-outline btn-error" disabled={!draft && !a.allowed} onClick={() => setDlg('teardown')}><Icon name="trash" className="size-4" />{draft ? 'Delete draft' : 'Teardown'}</button></Tip>
+        </div>
+      </SectionCard>
+      {rows.length > 0 && <SectionCard icon="refresh" title="Container images" subtitle="Update one container's image without a new revision.">
+        <ul className="list">{rows.map((r) => <li key={`${r.workload}/${r.container}`} className="list-row items-center px-0"><div className="list-col-grow min-w-0"><p className="font-medium break-words">{r.workload} / {r.container}</p><p className="text-sm font-mono break-all">{r.image}</p></div>
+          <button className="btn btn-sm" disabled={!a.allowed} aria-label={`Update image of ${r.workload} ${r.container}`} onClick={() => setDlg(r)}>Update image</button></li>)}</ul>
+      </SectionCard>}
+      {dlg === 'teardown' && <ConfirmDialog title={draft ? 'Delete draft stack' : `Tear down ${s.slug}`} confirmLabel={draft ? 'Delete draft' : 'Tear down'}
+        description={draft ? 'The draft and its revisions are removed.' : 'Workloads are removed from the cluster. Persistent volumes are never deleted.'}
         typed={s.environment_tier === 'prod' && !draft ? s.namespace : undefined} onClose={() => setDlg(null)}
-        onSubmit={async (reason) => {
+        onConfirm={async (reason) => {
           const d = await act(() => send<S['Deployment']>('DELETE', '/namespaces/{ns}/stacks/{stack}', { params: { path: { ns: s.namespace, stack: s.slug } },
             body: { reason, confirm_environment_tier: s.environment_tier } }), draft ? 'Draft deleted' : 'Teardown requested', [['inventory'], ['deployments', s.namespace, s.slug]])
           if (d && (d as any).id) nav(`/deployments/${(d as any).id}`); else if (d && draft) nav(`/n/${s.namespace}`)
           return d
         }} />}
       {dlg && dlg !== 'teardown' && <ImageUpdateDialog s={s} {...dlg} current={dlg.image} onClose={() => setDlg(null)} />}
-    </section>
+    </div>
   )
 }
 

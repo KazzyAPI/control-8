@@ -1,33 +1,34 @@
-import { Link } from 'react-router'
-import { get, sumReady, useFlash, hhmm, type S } from '../lib'
-import { ProfileBadge, StatusBadge, TierBadge } from './Badges'
-import { RowMenu } from './Parts'
 import { useQuery } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
+import { Link } from 'react-router'
+import { get, hhmm, sumReady, type S } from '../lib'
+import { DataTable, EmptyState, Icon, Notice, ProfileBadge, StatusBadge, TierBadge, type Column } from './ui'
 
 // UI-023: shown on every stack of an unreachable target.
 export function TargetNote({ target }: { target?: string }) {
   const q = useQuery({ queryKey: ['targets'], queryFn: () => get<{ items: S['Target'][] }>('/targets') })
   const t = q.data?.items.find((x) => x.name === target)
   if (!t || t.reachable !== false) return null
-  return <div className="alert alert-warning my-2" role="status"><span>Cluster {t.name} unreachable {'—'} status as of {hhmm(t.last_seen_at)}</span></div>
+  return <Notice tone="warning" title={`Cluster ${t.name} is unreachable`}>Status as of {hhmm(t.last_seen_at)}; changes cannot be applied until it is back.</Notice>
 }
 
-// UI-011/015/024: one stack row, used by overview, namespace and asset screens.
-export function StackRow({ s }: { s: S['Stack'] }) {
-  const [r, d] = sumReady(s)
-  const n = useFlash(JSON.stringify([s.health, s.safety_profile, r, d, s.state]))
-  const href = `/n/${s.namespace}/s/${s.slug}`
-  return (
-    <tr key={n} className={n ? 'flash' : ''}>
-      <th scope="row"><Link to={href}>{s.slug}</Link> <TierBadge tier={s.environment_tier} /></th>
-      <td><ProfileBadge profile={s.safety_profile} /></td>
-      <td><StatusBadge text={s.state === 'active' ? (s.health ?? 'unknown') : s.state} /></td>
-      <td>{r}/{d} <progress className={`progress w-16 align-middle ${r < d ? 'progress-warning' : 'progress-success'}`} value={r} max={Math.max(d, 1)} aria-hidden="true" /></td>
-      <td>{s.target}</td>
-      <td><RowMenu label={`Actions for ${s.slug}`}>
-        <li><Link to={href}>Open stack</Link></li>
-        <li><Link to={`${href}/revisions/new`}>New revision</Link></li></RowMenu></td>
-    </tr>
-  )
+export const healthOf = (s: S['Stack']) => (s.state === 'active' ? (s.health ?? 'unknown') : s.state)
+export const ReadyBar = ({ r, d }: { r: number; d: number }) => <>{r}/{d} <progress className={`progress w-16 align-middle ${r < d ? 'progress-warning' : 'progress-success'}`} value={r} max={Math.max(d, 1)} aria-hidden="true" /></>
+
+// UI-011/015/024: stack columns shared by the overview, namespace and asset tables (the row flashes when it changes live).
+const COLUMNS: Column<S['Stack']>[] = [
+  { key: 'stack', header: 'Stack', rowHeader: true, cell: (s) => <span className="flex flex-wrap items-center gap-2"><Link to={`/n/${s.namespace}/s/${s.slug}`} className="font-semibold">{s.slug}</Link> <TierBadge tier={s.environment_tier} /></span> },
+  { key: 'profile', header: 'Safety profile', hideBelow: 'md', cell: (s) => <ProfileBadge profile={s.safety_profile} /> },
+  { key: 'health', header: 'Health', cell: (s) => <StatusBadge text={healthOf(s)} /> },
+  { key: 'ready', header: 'Ready', cell: (s) => { const [r, d] = sumReady(s); return <ReadyBar r={r} d={d} /> } },
+  { key: 'target', header: 'Target', hideBelow: 'sm', cell: (s) => <span className="inline-flex items-center gap-1"><Icon name="server" className="size-4 text-base-content/60" />{s.target}</span> },
+]
+const sig = (s: S['Stack']) => JSON.stringify([s.health, s.safety_profile, sumReady(s), s.state])
+
+export function StackTable({ stacks, label = 'Stacks', loading, empty }: { stacks: S['Stack'][]; label?: string; loading?: boolean; empty?: ReactNode }) {
+  return <DataTable label={label} columns={COLUMNS} rows={stacks} rowKey={(s) => s.id} rowSig={sig} loading={loading} empty={empty} actionsLabel={(s) => `Actions for ${s.slug}`}
+    rowActions={(s) => <>
+      <li><Link to={`/n/${s.namespace}/s/${s.slug}`}><Icon name="layers" className="size-4" />Open stack</Link></li>
+      <li><Link to={`/n/${s.namespace}/s/${s.slug}/revisions/new`}><Icon name="plus" className="size-4" />New revision</Link></li></>} />
 }
-export const STACK_HEAD = ['Stack', 'Safety profile', 'Health', 'Ready', 'Target', 'Actions']
+export const NoStacks = ({ to, cta }: { to?: string; cta?: string }) => <EmptyState icon="layers" to={to} cta={cta} hint="A stack is a set of manifests deployed to one target.">No stacks.</EmptyState>
