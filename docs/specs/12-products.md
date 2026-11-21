@@ -86,7 +86,7 @@ One wizard turns legacy data (applications in `unassigned`, stacks without envir
 | MIG-005 | `POST /migrations/plans/{id}/apply {confirm_prod?}` applies all DB changes in **one SQLite transaction**, then starts adoption items as normal adopt deployments (DSC-045: prod grant gate, events) and reports their ids. The plan records `updated_at` of every row it reads; any change since → 409 `plan_stale` (re-plan). Applying an applied plan returns its result (idempotent); adoption items are resumable per item (DSC-046). |
 | MIG-006 | Every changed entity is audited with its own action (`product.create`, `environment.create`, `application.reassign`, `stack.environment_set`, `role_binding.create`) carrying `details.migration_id`, plus one `migration.apply` summary event. |
 | MIG-007 | Undo: `POST /migrations/{id}/undo` within `C8_MIGRATION_UNDO_WINDOW` (default 7 d) builds and applies the reverse plan in one transaction, if every touched row is unchanged since the apply; else 409 `undo_conflict` listing rows (the user can build a manual reverse plan in the wizard). **Not undoable:** executed adoptions (use release, DSC-049), deployments and grants made after the migration, audit records; a created product or environment is deleted by undo only if still empty. |
-| MIG-008 | Permissions: `global_admin`, or `admin` of the target product. Creating a product or setting `approver_group` stays `global_admin` (PRD-006/013). A product admin may claim applications from `unassigned` only if they are also `admin` of every namespace where those applications have stacks. |
+| MIG-008 | Permissions: `global_admin`, or an **owner** of the target product (M17c). Creating a new product in a plan follows MEM-005 and makes the caller its first owner; `team_binding` becomes a group-based product binding. An owner may claim applications from `unassigned` only if they are also `admin` of every namespace where those applications have stacks. |
 | MIG-009 | Never writes to a cluster except adoption items, which go through the normal adopt path under the grant gate. |
 | MIG-010 | Events: `migration.plan.created` (`MigrationPlan` summary) and `migration.applied` / `migration.undone` (`MigrationResult`), delivered to the plan creator, the product's admins and `global_admin`. |
 | MIG-011 | Entry points: overview card "N applications need migrating" (count of `unassigned` applications plus legacy stacks), Products › Migrate (`/products/migrate`), and from M21 the Cluster page "Adopt…" which opens the wizard with discovered workloads preselected. |
@@ -101,6 +101,66 @@ One wizard turns legacy data (applications in `unassigned`, stacks without envir
 | Grants | `product = unassigned`, scope otherwise unchanged; approver = namespace group (PRD-021) |
 | Demo/seed data (kind e2e fixtures, `scripts/smoke.sh`) | Updated to create product `shop` with `dev`/`staging`/`prod` environments and to exercise one legacy app through the wizard API |
 
+## Membership, owners and access requests (M17c, amends M17)
+
+M17 is built as written above; M17c changes the rules below and they win where they differ (PRD-001 `approver_group` becomes optional, PRD-011 namespace bindings, PRD-013, PRD-021, PRD-023).
+
+| ID | Rule |
+|---|---|
+| MEM-001 | **Membership** = holding any product role. M17 product role bindings gain a user subject: `role_binding` has exactly one of `idp_group` / `user_id`; `user_id` bindings are allowed only with a `product_id` (direct membership). Effective product role = highest of the user's group-based and direct product bindings (and `global_admin`). |
+| MEM-002 | Non-members see only the **product directory**: `slug`, `name`, `description`, `owner` (team text), owners' display names, `tags`, and `member: false`. Every other product, application, environment, stack, deployment, grant, finding or migration of that product → 404 (API-005). Built-in `unassigned` is exempt (legacy namespace rules, PRD-021). |
+| MEM-003 | On stacks of a non-`unassigned` product, namespace bindings grant at most `viewer` (namespace owners still see what runs in their namespace); deploying, teardown, image updates and revisions need product role ≥ `operator` (or `global_admin`). Amends PRD-011. `allowed_products` (PRD-012) still applies. |
+| MEM-004 | **Owners**: `product_owner(product_id, user_id, added_by, added_at)`. The creator is the first owner. Owners have product `admin` implicitly and can: edit product settings incl. `approver_group` (amends PRD-013), manage members (any role up to `admin`) and owners, approve/deny access requests and EA grants. Product `admin`s (non-owners) manage members up to `operator`. |
+| MEM-005 | Product creation: `global_admin`, or members of optional `C8_PRODUCT_CREATOR_GROUP` (default unset = `global_admin` only). `approver_group` is optional (amends PRD-001). `global_admin` may add/remove owners of any product (reassign). |
+| MEM-006 | The last owner cannot be removed (409 `last_owner`); add another owner first. Owner add/remove audited (`product.owner_add`, `product.owner_remove`) and published (`product.updated`). |
+| MEM-007 | **Approver set** of a product = its owners ∪ current members of `approver_group` (if set) — either source suffices (OR). Applies to access requests **and** EA grants. For `unassigned` the set is the namespace `approver_group` (unchanged). Amends PRD-021. |
+| MEM-008 | **Never self-approve**: the requester is always removed from the approver set. If the remaining set is empty (sole owner, no group, requesting for themselves), the request is still created, marked `fallback_required`, and only a `global_admin` may decide it (audit `approved_as_fallback`); the UI tells the requester to add a second owner or an approver group. Break-glass never approves. |
+| MEM-009 | **Access request** (`par_`): `product`, `requester`, `reason` (10..500), `requested_role` (`viewer` \| `operator`, default `operator`, AUTH-028; `admin` only by owner action), `status` `requested` → `approved` \| `denied` \| `cancelled`, `decided_by`, `decision_note`, `granted_role` (approver may lower, never raise above `operator`). One open request per (user, product) (409 `request_exists`). Approval creates a direct membership binding (MEM-001). Requests older than 30 days auto-cancel (sweeper). Audited `product_access.request/approve/deny/cancel`. |
+| MEM-010 | **EA grant** = the M8 access grant for prod-tier environments (prod, staging), scope (target, namespace, product) (PRD-020). Requesting needs product role ≥ `operator` (else 403 `not_a_member`). It can be requested from anywhere for the active product (`POST /access-grants {product, environment or target+namespace, ...}`); approvers = MEM-007/008. |
+| MEM-011 | `/me` adds `memberships: [{product, role, via: user\|group\|owner}]`, `owner_of: [product]`, `pending_requests: {access: [AccessRequest], grants: [AccessGrant]}` (the caller's own open ones) and `approval_queue_count`. `approver_for_products` = products where the caller is in the approver set (owner or group). Amends PRD-023. |
+| MEM-012 | Notifications: the GRT-040 webhook also sends `product_access.requested`, `.approved`, `.denied`; payloads carry the product, its owners' emails and the approver group so a bridge can route to the owners. In-app: approver queue badge (MEM-011). |
+| MEM-013 | Membership changes: `PUT /products/{p}/members/{user}` (role) and `DELETE` by owners/product admins (MEM-004); removing a member revokes their requested/approved/active EA grants on that product (audit `access_grant.revoke` with reason `membership_removed`). |
+
+### API (M17c)
+
+| Method | Path | Purpose | Who |
+|---|---|---|---|
+| GET | `/api/v1/products` | Member products in full + directory entries (`member: false`) for the rest | any |
+| GET | `/api/v1/products/{p}/members` | Direct + group-derived members | product viewer |
+| PUT, DELETE | `/api/v1/products/{p}/members/{user}` | Set role / remove direct membership | owner / product admin (MEM-004) |
+| GET, POST | `/api/v1/products/{p}/owners` | List / add owner `{user}` | product viewer / owner, global_admin |
+| DELETE | `/api/v1/products/{p}/owners/{user}` | Remove owner (409 `last_owner`) | owner, global_admin |
+| POST | `/api/v1/products/{p}/access-requests` | Request membership `{reason, requested_role?}` | any non-member |
+| GET | `/api/v1/products/{p}/access-requests` | Open/decided requests | approver set, global_admin |
+| GET | `/api/v1/access-requests/mine` | Caller's requests | any |
+| POST | `/api/v1/access-requests/{id}/approve` | `{granted_role?, note?}` | approver set ≠ requester (MEM-008 fallback: global_admin) |
+| POST | `/api/v1/access-requests/{id}/deny` | `{note}` | same |
+| POST | `/api/v1/access-requests/{id}/cancel` | | requester |
+| GET | `/api/v1/users?q=` | Find users who have logged in (id, display name, email) to add as member/owner | owners, product admins, global_admin |
+
+Directory entries never expose counts, applications or environments.
+
+## Active product context (M18)
+
+| ID | Rule |
+|---|---|
+| CTX-001 | The UI always has one **active product**, carried in the URL: every product-scoped screen lives under `/p/{product}/…` (applications, environments, deployments, grants, findings, migration). The navbar product switcher changes the URL. |
+| CTX-002 | Redirects: after login, or on any route without a product: if the URL names a product the user is a member of → go; else last-used product (per-viewer `localStorage`) if still a member; else the only membership if exactly one; else `/products` ("Choose a product"). A non-member opening `/p/{x}/…` sees the directory entry and "Request access" (no data). |
+| CTX-003 | Cross-product views (`/all/stacks`, `/all/grants`, `/all/findings`, `/all/audit`) exist only for `global_admin`. |
+| CTX-004 | API: product-scoped paths where they exist (`/products/{p}/…`); existing list endpoints (`/inventory`, `/access-grants`, `/audit`, `/findings`, `/discovery/workloads`) accept `?product=` and the SPA always sends it. No `X-Product` header and no server-side "current product" state: authorization never depends on the selected product, only on membership (MEM-002/003). |
+| CTX-005 | The navbar shows a persistent **"Request prod access"** (EA) action for the active product when the user is a member and the product has prod-tier environments; it opens the grant form with the product's prod-tier environments to choose from. |
+
+## Local multi-user testing (M17d, dev only)
+
+| ID | Rule |
+|---|---|
+| DEV-001 | `cmd/devidp` (build tag `devidp`; the production Dockerfile builds only `./cmd/control8` without that tag, and CI asserts the image has no `devidp` binary) runs a standalone OIDC provider on `127.0.0.1` using the vendored `mockoidc`. |
+| DEV-002 | Refuses to start unless `--i-know-this-is-insecure` or `C8_DEVIDP_INSECURE=1` is set, and refuses to bind a non-loopback address. Prints a red "DEV ONLY" banner. |
+| DEV-003 | Users and groups from a JSON file (`dev/devidp.json`, default shipped): `alice` (groups `platform-admins`), `bob` (`developers`), `carol` (`payments-approvers`), `dave` (none). Its `/login` page lists the users as buttons; choosing one queues it in mockoidc and continues the auth-code flow. `GET /dev/login-as?user=<name>` does the same non-interactively for scripts. |
+| DEV-004 | `make dev-idp` starts devidp; `make dev` starts devidp + Control 8 (`go run`, no Docker) with `C8_OIDC_ISSUER` pointing at it, `C8_BOOTSTRAP_ADMIN_GROUP=platform-admins`, a break-glass password `dev` (hash generated at start), data in `./tmp/dev`, and `C8_TARGETS` = the kind cluster if `./tmp/kubeconfig` exists, else `[]`. `scripts/dev-seed.sh` logs in each user via `login-as` (curl cookie jar) and, as alice, creates product `shop` (alice owner), as alice creates `payments` and adds carol as owner (alice then removes herself), so the preset story holds. |
+| DEV-005 | `docs/ops/local-dev.md`: three browser profiles (alice, bob, carol) walkthrough — bob requests access to `shop`, alice approves; bob deploys to dev; bob requests EA for staging, alice approves; carol cannot approve `shop`; dave sees only the directory. |
+| DEV-006 | `scripts/e2e-multiuser.sh` runs the same story via the API with `login-as` and asserts each step (used in CI with the unit job; no cluster needed except for the deploy steps, which are skipped when no kind kubeconfig exists). |
+
 ## Events (M17)
 
 | Event | Payload | Delivered to |
@@ -109,6 +169,8 @@ One wizard turns legacy data (applications in `unassigned`, stacks without envir
 | `product.removed` | `{slug}` | Same |
 | `application.updated` | `Application` | Viewers of the product |
 | `environment.updated` | `Environment` | Viewers of the product |
+| `product_access_request.updated` | `AccessRequest` | M17c: requester, the product's approver set, `global_admin` |
+| `product_membership.updated` | `{product, user, role \| null}` | M17c: that user, owners/admins of the product |
 
 `stack.*`, `deployment.*`, `revision.*` events are additionally delivered to holders of a product role on the stack's product (PRD-011).
 

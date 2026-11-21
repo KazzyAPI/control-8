@@ -125,6 +125,7 @@ Immediately unhealthy (no need to wait for timeout): Deployment condition `Progr
 | K8S-063 | Rollout health (above) is evaluated on every informer change for the deployment's stack, with a 5 s timer as a safety net; progress is published as `deployment.updated` (coalesced 1/s). |
 | K8S-064 | Fallback: if a kind cannot be watched (RBAC lacks `watch`, or watch keeps failing while `ServerVersion` succeeds), Control 8 lists it with the same selector every `C8_TARGET_CHECK` and logs `informer_degraded`; `target.status` shows `sync: polling`. Target `sync` ∈ `syncing` \| `watching` \| `polling` \| `down`. |
 | K8S-065 | While a target is unreachable, its stacks keep their last observed state with health `unknown` and `observed_at`; caches are not cleared. |
+| K8S-066 | (M17e, 13) Deploy plans use server-side `dryRun=All` applies and never write (PLN-001/007). While a deployment runs, a namespace-scoped Event informer (`involvedObject.kind=Pod`) feeds the image-pull and rollout steps (STP-006); it is stopped when no deployment in that namespace is running. `rbac.yaml` adds `get/list/watch` on `events` (core); without it steps fall back to pod statuses. All messages pass the redactor (RED-020). |
 
 ## Audit events
 

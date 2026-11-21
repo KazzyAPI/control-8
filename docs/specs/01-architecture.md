@@ -30,6 +30,7 @@
 | Component | Package | Responsibility |
 |---|---|---|
 | `cmd/control8` | main | Load config, open DB, run migrations, start HTTP + background loops |
+| `cmd/devidp` | main (tag `devidp`) | **Dev only** (M17d, DEV-001..006): local mockoidc-based OIDC provider with preset users; never built into the image |
 | `internal/config` | | Parse `C8_*` env (ConfigMap/Secret `envFrom`), optional `_FILE` variants, `C8_TARGETS`, `C8_TOKENS` |
 | `internal/store` | | SQLite access, embedded SQL migrations |
 | `internal/auth` | | OIDC, sessions, break-glass, static tokens, role + approver-group resolution |
@@ -43,6 +44,7 @@
 | `internal/events` | | Event bus, replay buffer, SSE handler, per-viewer filter (10) |
 | `internal/digest` | | Opt-in registry digest poll for `managed_rollout` stacks (K8S-051) |
 | `internal/parachute` | | *(later)* HTTP client for Parachute, poller, mapping (04) |
+| `internal/redact` | | M17e: central fail-closed redaction for API, SSE, audit, webhooks and logs (13 RED-*) |
 | `internal/audit` | | Append-only audit writer + query |
 | `internal/api` | | REST handlers (JSON) |
 | `internal/web` | | Serves the embedded SPA (`web/dist` via `go:embed`) with SPA fallback and cache headers (UI-005) |
@@ -127,6 +129,11 @@ No other runtime (Go) or frontend (`web/package.json`) dependencies without a de
 | `C8_DOCKER_HOST` | unset | *(Docker track)* e.g. `unix:///var/run/docker.sock`; seeds target `local` when set |
 | `C8_PARACHUTE_URL`, `C8_PARACHUTE_TOKEN`, `C8_PARACHUTE_POLL`, `C8_PARACHUTE_SCOPE` | unset / unset / `30s` / `control-8` | *(Docker track)* 04 |
 | `C8_ENVIRONMENT_PRESETS` | `[{"name":"dev","tier":"non-prod"},{"name":"uat","tier":"non-prod"},{"name":"staging","tier":"prod"},{"name":"prod","tier":"prod"}]` | M17: environment presets offered by the wizard (PRD-041/042) |
+| `C8_DRYRUN_PROD_WITHOUT_GRANT` | `true` | M17e: allow dry run on prod-tier stacks without an EA grant (GRT-032; owner to confirm) |
+| `C8_REDACT_SECRET_REFS` | `names` | M17e: `names` or `hidden` for secretKeyRef display (RED-002) |
+| `C8_REDACT_CONFIGMAP_VALUES` | `masked` | M17e: `masked` (per rules) or `keys-only` (RED-006) |
+| `C8_REDACT_EXTRA_NAME_PATTERNS`, `C8_REDACT_EXTRA_VALUE_PATTERNS` | unset | M17e: additional regexes, additive only (RED-010) |
+| `C8_PRODUCT_CREATOR_GROUP` | unset | M17c: IdP group allowed to create products besides `global_admin` (MEM-005) |
 | `C8_MIGRATION_UNDO_WINDOW` | `168h` | M17b: undo window for migration plans (MIG-007) |
 | `C8_DISCOVERY_MAX` | `20000` | M19: max discovered workloads per target in the read model (DSC-005) |
 | `C8_DISCOVERY_SYSTEM_NAMESPACES` | `kube-system,kube-public,kube-node-lease` | M19: class `system` namespaces (DSC-006) |

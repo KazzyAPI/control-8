@@ -160,6 +160,18 @@ Unbuilt routes carry `x-milestone: <M>` in openapi and are skipped by the API-00
 | GET, POST | `/api/v1/products/{product}/environments` | List / create environment | viewer / admin | | M17 |
 | GET, PATCH, DELETE | `/api/v1/products/{product}/environments/{env}` | Read / update (PRD-046) / delete (409 if stacks) | viewer / admin / admin | | M17 |
 | GET | `/api/v1/products/{product}/overview` | Applications × environments matrix (PRD-030) | viewer (product) | | M17 |
+| GET | `/api/v1/products/{product}/members` | Members (direct + via group) | viewer (product) | | M17c |
+| PUT, DELETE | `/api/v1/products/{product}/members/{user}` | Set role / remove direct member | owner / product admin | | M17c |
+| GET, POST | `/api/v1/products/{product}/owners` | List / add owner | viewer / owner, global_admin | | M17c |
+| DELETE | `/api/v1/products/{product}/owners/{user}` | Remove owner (409 `last_owner`) | owner, global_admin | | M17c |
+| GET, POST | `/api/v1/products/{product}/access-requests` | List (approvers) / request membership (non-members) | approver set / any | | M17c |
+| GET | `/api/v1/access-requests/mine` | Caller's membership requests | any | | M17c |
+| POST | `/api/v1/access-requests/{id}/approve` | `{granted_role?, note?}` | approver set ≠ requester (fallback: global_admin) | | M17c |
+| POST | `/api/v1/access-requests/{id}/deny` | `{note}` | same | | M17c |
+| POST | `/api/v1/access-requests/{id}/cancel` | | requester | | M17c |
+| GET | `/api/v1/users` | `?q=` user search (logged-in users only) | owner / product admin / global_admin | | M17c |
+| POST | `/api/v1/namespaces/{ns}/stacks/{stack}/plans` | Dry run → stored deploy plan (13 PLN-001..007) | operator (product member) | per GRT-032 | M17e |
+| GET | `/api/v1/deploy-plans/{id}` | Read plan | viewer | | M17e |
 | POST | `/api/v1/migrations/dry-run` | Compute a migration plan, not stored | MIG-008 | | M17b |
 | POST | `/api/v1/migrations/plans` | Compute + store plan | MIG-008 | | M17b |
 | GET | `/api/v1/migrations/plans/{id}` | Read plan | creator / product admin / global_admin | | M17b |
@@ -180,6 +192,6 @@ Unbuilt routes carry `x-milestone: <M>` in openapi and are skipped by the API-00
 | POST | `/api/v1/discovery/adoptions/{id}/execute` | Start adopt deployment | operator (product) | ✔ | M21 |
 | POST | `/api/v1/namespaces/{ns}/stacks/{stack}/release` | Stop managing, keep objects | operator | ✔ | M21 |
 
-Changed shapes (M17): `Stack`, `Deployment` add `product`, `application`, `environment` (nullable); `AccessGrantCreate` adds `product` (default `unassigned`); `AccessGrant` adds `product`, `environment`, `approver_group`; `RoleBinding(Create)` adds `product`; `Principal` adds `approver_for_products`; `PolicyRules` adds `allowed_products`; `Asset` adds `product`, `external_ref`, extended `managed_by`; `POST /namespaces/{ns}/stacks` accepts `product` (400 `asset_ambiguous` without it when ambiguous) and is limited to `unassigned` apps for new stacks (PRD-044). M19: `Target` adds `discovery`. M21: `Deployment.action` adds `adopt`, `release`; `Revision.origin` adds `adoption`.
+Changed shapes (M17e): `DeploymentCreate` adds `plan`; `Deployment` adds `plan`, `steps`, `steps_summary`; `RevisionCreate` adds `base_revision`, `copy_from`; revision/plan/step payloads are redacted (RED-*). Changed shapes (M17c): `Principal` adds `memberships`, `owner_of`, `pending_requests`, `approval_queue_count`; `Product` adds `member`, `my_role`, `owners` (directory entries carry only directory fields, MEM-002); `ProductCreate.approver_group` optional; `RoleBinding(Create)` adds `user` (direct membership); `AccessGrant` adds `fallback_required`; list endpoints accept `?product=` (CTX-004). Changed shapes (M17): `Stack`, `Deployment` add `product`, `application`, `environment` (nullable); `AccessGrantCreate` adds `product` (default `unassigned`); `AccessGrant` adds `product`, `environment`, `approver_group`; `RoleBinding(Create)` adds `product`; `Principal` adds `approver_for_products`; `PolicyRules` adds `allowed_products`; `Asset` adds `product`, `external_ref`, extended `managed_by`; `POST /namespaces/{ns}/stacks` accepts `product` (400 `asset_ambiguous` without it when ambiguous) and is limited to `unassigned` apps for new stacks (PRD-044). M19: `Target` adds `discovery`. M21: `Deployment.action` adds `adopt`, `release`; `Revision.origin` adds `adoption`.
 
-New problem codes: `approver_group_missing` (now per product), `product_not_allowed_in_namespace`, `asset_ambiguous`, `plan_stale`, `undo_conflict`, `not_adoptable`, `tool_managed`, `secret_not_adoptable`, `spec_change_detected`, `namespace_mapping_mismatch`, `discovery_unavailable`.
+New problem codes (M17e): `plan_stale`, `hidden_value_unresolved`, 429 on dry-run rate limit. `grant_required` bodies gain `approvers`, `pending_grant`, `request_url` and are returned **before** anything is created (GRT-030). New problem codes (M17c): `not_a_member`, `last_owner`, `request_exists`, `fallback_required`. Earlier: `approver_group_missing` (now per product), `product_not_allowed_in_namespace`, `asset_ambiguous`, `plan_stale`, `undo_conflict`, `not_adoptable`, `tool_managed`, `secret_not_adoptable`, `spec_change_detected`, `namespace_mapping_mismatch`, `discovery_unavailable`.

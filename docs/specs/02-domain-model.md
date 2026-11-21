@@ -35,8 +35,40 @@ Conventions: IDs are `<prefix>_<16 base32 lowercase>` (D-24). Times are RFC 3339
 | id, slug | text | `slug` globally unique, immutable; built-in `unassigned` |
 | name, description, owner | text | `owner` = team, free text |
 | links | json | `[{label, url}]` |
-| approver_group | text | Product team's OIDC group; approves prod grants for its apps (PRD-021); required except `unassigned`; `global_admin` only |
+| approver_group | text | Product team's OIDC group; approves prod grants for its apps (PRD-021). From M17c optional and an **additional** approver source next to owners (MEM-007); settable by owners |
 | tags | json | `[]string` |
+
+### deploy_plan (`dpl_`) — M17e, 13
+| Field | Notes |
+|---|---|
+| id, stack_id, revision_id, action | `apply` \| `teardown` |
+| hash | PLN-004 |
+| objects | json: per object action + redacted before/after summary + redacted diff (PLN-002) |
+| policy_result, conflicts, impact, warnings | json (PLN-003) |
+| requires_grant, requires_approval | bool |
+| created_by, expires_at | 15 min |
+
+### deployment_step — M17e, 13
+| Field | Notes |
+|---|---|
+| deployment_id, seq, key, parent_key | Unique (deployment, key) |
+| label, status | `pending` \| `running` \| `succeeded` \| `failed` \| `skipped` |
+| started_at, finished_at | |
+| detail | Redacted JSON (before/after, counts) |
+| error_code, message, hint, docs_url, first_failure | STP-007 |
+
+### product_owner — M17c
+| Field | Notes |
+|---|---|
+| product_id, user_id, added_by, added_at | Unique (product, user); creator is first owner; last owner cannot be removed (MEM-004/006) |
+
+### product_access_request (`par_`) — M17c
+| Field | Notes |
+|---|---|
+| id, product_id, requester_id, reason, requested_role | MEM-009 |
+| status | `requested` \| `approved` \| `denied` \| `cancelled` |
+| fallback_required | bool: approver set minus requester is empty (MEM-008) |
+| decided_by, decided_at, decision_note, granted_role | |
 
 ### environment (`env_`) — M17, 12
 | Field | Type | Notes |
@@ -102,6 +134,7 @@ Immutable once created.
 |---|---|---|
 | id, stack_id, revision_id | text | `revision_id` null for teardown |
 | action | enum | `apply` \| `teardown` \| `adopt` \| `release` (M21, DSC-045/049) |
+| plan_id | text | M17e: bound or implicit deploy plan (PLN-005/006) |
 | trigger | enum | `manual` \| `image_update` \| `digest_poll` |
 | status | enum | see below |
 | requested_by, approved_by | text | `approved_by` ≠ `requested_by` (4-eyes) |
@@ -205,7 +238,7 @@ Fields, states and rules in 09. Never deleted. Since M17 adds `product_id` (scop
 |---|---|
 | user | id, issuer, subject (unique together), email, display_name, groups (json, last login), is_break_glass, last_login_at |
 | session | id_hash, user_id, csrf_token, auth_method, expires_at (8 h; break-glass 1 h), created_at |
-| role_binding | id, idp_group, namespace_id, product_id (at most one set; both null = global; product since M17, PRD-010), role (`viewer`\|`operator`\|`admin`\|`global_admin`) |
+| role_binding | id, idp_group **or** user_id (exactly one; `user_id` only with `product_id` = direct membership, M17c MEM-001), namespace_id, product_id (at most one set; both null = global; product since M17, PRD-010), added_by, role (`viewer`\|`operator`\|`admin`\|`global_admin`) |
 | token | id, name, hash, owner_sub, owner_user_id (resolved, null if unknown), namespace_id (null = all the owner's namespaces), role, expires_at, last_used_at, revoked_at. Synced from `C8_TOKENS` at startup; never written by the API (AUTH-033) |
 
 ### safety_profile (enum, not a table)
@@ -252,5 +285,6 @@ Created as `pending_approval` when `policy_result.requires_approval` (or teardow
 | DOM-012 | `stack.safety_profile` = profile of revision `desired_revision`; profile is valid for `stack.runtime`. |
 | DOM-013 | A deployment on a prod stack has `grant_id` or `grant_bypass` set; the grant's requester = the acting user (token owner for tokens) and its scope = stack's (target, namespace, product). |
 | DOM-014 | `access_grant.approver_id` ≠ `requester_id`, and the approver was a member of the grant's resolved approver group (product's, or namespace's for `unassigned`, PRD-021) at decision time. |
+| DOM-017 | (M17c) A product other than `unassigned` always has ≥ 1 owner; an approval's decider is never the requester; a `fallback_required` request/grant is decided only by `global_admin`. |
 | DOM-015 | Every asset has a product; the built-in `unassigned` product cannot be deleted. |
 | DOM-016 | `discovered_workload`, `finding` rows are derived; only the discovery pipeline writes them (acknowledgement fields excepted). |

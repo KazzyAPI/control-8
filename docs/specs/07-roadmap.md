@@ -128,7 +128,7 @@ Acceptance: smoke passes on a clean machine; manual security checklist in PR; im
 
 ## Post-v1: Products (M17–M18b) and discovery (M19–M21)
 
-Order: products first (the frame), then discovery. Same rules R-1..R-8. Every new route lands with its `x-milestone` marker removed in openapi (API-002). Kind fixtures for M19–M21 live in `internal/discovery/testdata/kind/` and are applied by the `k8s` tests.
+Order: products first (the frame), then discovery. **Execution order:** M17 → M17c → M17d → M17e → M17b → M18 → M18c → M18b → M19 → M20 → M21 (M17b moved after M17c because the wizard creates products with owners and memberships; M17e before the UI milestones because they render plans and steps). Sections below are in execution order. Same rules R-1..R-8. Every new route lands with its `x-milestone` marker removed in openapi (API-002). Kind fixtures for M19–M21 live in `internal/discovery/testdata/kind/` and are applied by the `k8s` tests.
 
 ## M17 — Products, applications, environments; approver and grant rework (backend)
 
@@ -141,6 +141,38 @@ Acceptance:
 - `staging` environment on a non-prod namespace makes the stack prod (grant required); lowering a tier needs global_admin.
 - Kind e2e: one app placed into two environments (dev, staging) on kind, both deployed; `GET /products/shop/overview` shows both cells with image/digest, health and rollout state; an SSE subscriber with only a product binding receives both stacks' events.
 Tests: SQL migration tests on a fixture DB; httptest matrices; `k8s` e2e as above.
+
+## M17c — Product membership, owners, access requests, approver rework (backend)
+
+Scope: 12 MEM-001..013 (amends M17 PRD-001/011/013/021/023): direct user product bindings, product directory for non-members, namespace bindings capped at viewer on product stacks, `product_owner` (creator first owner, last-owner guard, global_admin reassign), `C8_PRODUCT_CREATOR_GROUP`, access requests with sweeper, approver set = owners OR `approver_group` minus requester with `global_admin` fallback, EA grants require membership, member removal revokes EA grants, `/me` additions, `GET /users`, `?product=` filters (CTX-004), webhook events, `product_access_request.updated` / `product_membership.updated` events.
+Acceptance (httptest matrices):
+- member vs non-member × every product-scoped route: non-member gets directory fields only and 404 elsewhere; namespace operator without product role cannot deploy a product stack (403) but can view it.
+- owner approves bob's access request → bob becomes `viewer`/`operator` as granted; bob cannot approve his own; a member of `approver_group` who is not an owner can approve (OR logic); a user in neither → 403.
+- sole owner alice requests EA for herself with no group → grant `fallback_required`; another member cannot approve; `global_admin` can (audit `approved_as_fallback`); after adding carol as owner, carol can approve.
+- removing the last owner → 409 `last_owner`; global_admin can add a new owner then remove the old.
+- EA request for a product you are not a member of → 403 `not_a_member`; removing bob's membership revokes his active EA grant.
+- SSE: owners receive `product_access_request.updated`, a non-member does not.
+- Non-prod (AUTH-028): a product `operator` with no namespace binding deploys to dev with no grant/approval; a product `viewer` gets 403; a non-member with a namespace `operator` binding gets 403 `not_a_member`.
+- Front door (GRT-030): prod-tier (staging and prod) deploy, teardown and image update without an **active** grant → 403 `grant_required` with `approvers`, `pending_grant`, `request_url`; afterwards zero new deployment rows and exactly one `denied` audit event; an `approved` grant with a future `starts_at` is refused too. Re-check (GRT-031): a queued deployment whose grant expires (fake clock) fails `grant_expired`, nothing applied.
+Tests: httptest + table tests for approver-set resolution (pure function).
+
+## M17d — Local multi-user dev IdP
+
+Scope: 12 DEV-001..006: `cmd/devidp` (tag `devidp`, mockoidc, preset users from `dev/devidp.json`, user-picker login page, `/dev/login-as`), refusal without the insecure flag or on non-loopback, `make dev-idp`, `make dev` (no Docker), `scripts/dev-seed.sh`, `docs/ops/local-dev.md` (3 browser profiles), `scripts/e2e-multiuser.sh`; CI check that the release image has no devidp binary.
+Acceptance: `make dev` on a clean checkout starts both processes and the seed script creates `shop` (owner alice) and `payments` (owner carol); `scripts/e2e-multiuser.sh` passes (dave sees directory only; bob requests access, alice approves; bob requests EA for staging, alice approves, carol cannot); devidp exits non-zero without the flag and when asked to bind `0.0.0.0`; `docker image inspect`/file listing of the release image shows no `devidp`.
+Tests: unit tests for the flag/loopback guards and config parsing; the e2e script in CI.
+
+## M17e — Deploy plans, step checklist, central redaction (backend)
+
+Scope: 13 PLN-001..007, STP-001..009, RED-001..030, K8S-066, EVT-006, POL-R16, GRT-032: `deploy_plan` and `deployment_step` tables; plan route with server-side dry run, live diff, policy/ownership/grant/approval, impact; stored plan hash and `plan_stale` at request and worker start; implicit plans; step catalogue written by the executor (apply, teardown; adopt/release reserved for M21), sub-steps per object/container/workload; namespace-scoped Event informer during deployments + RBAC `events`; error catalogue + `docs/ops/troubleshooting.md`; `deployment.step` events; `internal/redact` wired into API responses, revisions (`__C8_HIDDEN__`, `base_revision`, `copy_from`), events, audit, webhooks and logs; `C8_DRYRUN_PROD_WITHOUT_GRANT` and redaction config.
+Acceptance (kind, `k8s` tag):
+- Dry run of a revision changing an image tag: plan shows `update` with image from → to and "restarts 2 pods"; every object's `resourceVersion` is unchanged afterwards; no stack mutex held (a concurrent deploy proceeds); 11th dry run in a minute → 429.
+- Good image: steps tick in order accepted → access → approval(skipped) → policy → ownership → dry_run → apply (sub-steps per object) → image_pull (Pulling/Pulled) → rollout → health → prune → done; `deployment.step` events arrive in that order.
+- Bad tag: `image_pull` fails with `image_pull_failed` and a sanitised reason, later steps `skipped`, `rollback` + `rollback_result` appear for a managed_rollout stack; message, hint and docs_url set.
+- Changing a live object between plan and `POST .../deployments {plan}` → 409 `plan_stale`; changing it after the request but before the worker starts → `dry_run` step fails `plan_stale`, nothing applied.
+- Canary test (RED-030): `secretKeyRef` env, literal `DB_PASSWORD=<canary>`, ConfigMap `API_TOKEN: <canary>`; dry run, deploy, failed deploy, rollback; canaries absent from every API response, SSE stream, audit row, webhook body, log line and DB output/detail columns; revision `GET` shows `__C8_HIDDEN__` and a new revision with `base_revision` keeps the value; masked diff shows `changed (hidden)`.
+- `C8_DRYRUN_PROD_WITHOUT_GRANT=false` → prod dry run without grant 403; default `true` → allowed and audited.
+Tests: redactor table + fuzz tests; plan diff unit tests on fixture objects; step-projection unit tests with a fake driver; `k8s` suite above.
 
 ## M17b — Migration assistant backend
 
@@ -155,9 +187,15 @@ Tests: unit for plan computation (pure over a snapshot) and reverse-plan generat
 
 ## M18 — Products UI
 
-Scope: 06 "Products" (UI-040..043): Products list, product page tabs (Applications, Environments matrix, Deployments, Access/Grants, Settings; Findings tab placeholder until M20), application page, breadcrumbs, deploy-to-another-environment flow, product-level role binding management on Access tab, overview product roll-up and "needs migrating" card. Live via existing and M17 events.
-Acceptance (Playwright on kind): product list cards show counts; matrix shows the app in dev and staging with live rollout progress after a deploy; "Deploy here" into an empty uat cell copies the source revision and deploys; staging cell shows PROD tier badge and the grant prompt; product binding added on Access tab lets a second user see the product; axe passes.
+Scope: 06 "Products" (UI-040..043) and "Product context" (UI-044..049, CTX-001..005): product picker `/products`, navbar switcher, `/p/:product/…` routing and redirects, directory + request-access flow, persistent EA header action, approver queue, members/owners on the Access tab; Products list, product page tabs (Applications, Environments matrix, Deployments, Access/Grants, Settings; Findings tab placeholder until M20), application page, breadcrumbs, deploy-to-another-environment flow, product-level role binding management on Access tab, overview product roll-up and "needs migrating" card. Live via existing and M17 events.
+Acceptance (Playwright on kind): product list cards show counts; matrix shows the app in dev and staging with live rollout progress after a deploy; "Deploy here" into an empty uat cell copies the source revision and deploys; staging cell shows PROD tier badge and the grant prompt; product binding added on Access tab lets a second user see the product; with devidp users (M17d): dave lands on the picker hero and requests access, alice sees it in her queue badge and approves, dave lands in `shop`; bob opens "Request prod access" from the navbar on any page; axe passes.
 Tests: Vitest for matrix cell reducer (stack/deployment/grant events), Playwright scenarios above.
+
+## M18c — Deploy screen and progress checklist UI
+
+Scope: 06 UI-050..056: deploy page with Dry run / Deploy now, plan view, front-door states (no Deploy now without an active EA grant on prod tiers; request/pending/countdown live), progress checklist with icons, timers, sub-steps, before→after cards, failure alert with hint, Retry/Roll back/Cancel, loading/empty/error states.
+Acceptance (Playwright on kind with devidp users): bob on a staging stack without EA sees no Deploy now, clicks "Request elevated access", alice approves in another profile, bob's page switches to the countdown and enables Deploy now without reload; dry run shows create/update badges and image from → to; deploying a bad tag shows the image-pull step failing with the hint, later steps skipped and rollback steps ticking; reload keeps the checklist; no canary string from the M17e fixture appears in the DOM; axe passes.
+Tests: Vitest for the step-tree reducer and plan view; Playwright as above.
 
 ## M18b — Migration wizard UI
 

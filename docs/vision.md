@@ -35,6 +35,10 @@ Every namespace and target is `prod` or `non-prod`. Non-prod: a normal namespace
 
 Teams think in **products**: a product owns several applications, its own environments (dev, uat, staging, prod — staging and prod are prod tier) and its own approver group, and the product page shows every app across every environment live. Control 8 also **sees everything in each cluster**, not only what it deployed: workloads are discovered read-only, classified (Control 8, Argo, Flux, Helm, operator, system, ungoverned), mapped to products and environments, and checked against policy as findings — "ungoverned in prod" is the headline number. Findings report; they cannot stop someone with their own kubeconfig (an admission policy can, documented as optional hardening). Ungoverned workloads can be adopted into a product without restarting anything; tool-managed ones are registered, never taken over. A migration assistant moves legacy apps into products and environments with a reviewable, reversible plan.
 
+## Product-first access and the deploy experience
+
+Everyone works inside a **product** they belong to: after login you choose one (or request access to it), and every screen is scoped to it. Members deploy freely to non-prod. Prod-tier environments (staging and prod) need a time-boxed **elevated approval** from the product's owners (or its approver group) — without it Control 8 does not even offer the deploy button. Before anything changes you can **dry run** a deployment and see exactly what is there now and what will replace it; during a deployment you watch a checklist tick (access, policy, apply, image pull, rollout, health) and, if something fails, it tells you what, why and what to do next — and automatically rolls back where the safety profile says so. Secret values are never shown, anywhere.
+
 ## Safety profiles
 
 Chosen per revision; must be obvious in UI and API:
