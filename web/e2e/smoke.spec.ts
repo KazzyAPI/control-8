@@ -52,7 +52,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
   })
 }
 
-// Every theme the switcher offers must pass axe (D-104). The choice is persisted in localStorage and applied as data-theme.
+// Every theme the switcher offers must pass axe (D-125). The choice is persisted in localStorage and applied as data-theme.
 for (const theme of ['light', 'dark', 'corporate', 'business', 'nord']) {
   test(`axe passes on the shell and sign-in in the ${theme} theme (UI-033)`, async ({ page, browser, baseURL }) => {
     await page.addInitScript((t) => localStorage.setItem('c8:theme', t), theme)

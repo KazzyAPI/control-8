@@ -613,6 +613,484 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProducts"];
+        put?: never;
+        post: operations["createProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        get: operations["getProduct"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteProduct"];
+        options?: never;
+        head?: never;
+        patch: operations["updateProduct"];
+        trace?: never;
+    };
+    "/products/{product}/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        get: operations["listApplications"];
+        put?: never;
+        post: operations["createApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/applications/{app}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                app: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        get: operations["getApplication"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteApplication"];
+        options?: never;
+        head?: never;
+        /** @description product field = reassign (global_admin, PRD-004) */
+        patch: operations["updateApplication"];
+        trace?: never;
+    };
+    "/products/{product}/applications/{app}/stacks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                app: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["placeApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        get: operations["listEnvironments"];
+        put?: never;
+        post: operations["createEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/environments/{env}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                env: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        get: operations["getEnvironment"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteEnvironment"];
+        options?: never;
+        head?: never;
+        patch: operations["updateEnvironment"];
+        trace?: never;
+    };
+    "/products/{product}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        get: operations["getProductOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/migrations/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["dryRunMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/migrations/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createMigrationPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/migrations/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getMigrationPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/migrations/plans/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["applyMigrationPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/migrations/{id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["undoMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/targets/{target}/discovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        get: operations["getTargetDiscovery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/targets/{target}/discovery/namespaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        get: operations["listDiscoveredNamespaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/targets/{target}/namespace-mappings/{k8s_ns}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: components["schemas"]["Slug"];
+                k8s_ns: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setNamespaceMapping"];
+        post?: never;
+        delete: operations["deleteNamespaceMapping"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discovery/workloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDiscoveredWorkloads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discovery/workloads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDiscoveredWorkload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discovery/workloads/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["assignDiscoveredWorkloads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listFindings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getFinding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["acknowledgeFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}/unacknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unacknowledgeFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discovery/adoptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["planAdoption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discovery/adoptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getAdoption"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/discovery/adoptions/{id}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["executeAdoption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/namespaces/{ns}/stacks/{stack}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["ns"];
+                stack: components["parameters"]["stack"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["releaseStack"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/namespaces/{ns}/stacks/{stack}/parachute": {
         parameters: {
             query?: never;
@@ -768,8 +1246,10 @@ export interface components {
             global_admin?: boolean;
             /** @description Cookie sessions only; send as X-CSRF-Token on mutations */
             csrf_token?: string | null;
-            /** @description Namespace slugs whose approver_group the user is in */
+            /** @description Namespace slugs whose approver_group the user is in (fallback for unassigned apps since M17) */
             approver_for?: string[];
+            /** @description M17: product slugs whose approver_group the user is in */
+            approver_for_products?: string[];
             namespaces?: {
                 slug?: string;
                 role?: components["schemas"]["Role"];
@@ -792,6 +1272,8 @@ export interface components {
             reachable?: boolean;
             /** @enum {string} */
             sync?: "syncing" | "watching" | "polling" | "down";
+            /** @description M19 */
+            discovery?: components["schemas"]["DiscoveryStatus"] | null;
             last_error?: string | null;
             /** Format: date-time */
             last_seen_at?: string | null;
@@ -845,9 +1327,16 @@ export interface components {
             description?: string | null;
             owner?: string | null;
             image_repo?: string | null;
-            /** @enum {string} */
-            managed_by?: "control8" | "argo";
+            /**
+             * @description flux/helm/operator/external from M17 (register-only)
+             * @enum {string}
+             */
+            managed_by?: "control8" | "argo" | "flux" | "helm" | "operator" | "external";
             external_url?: string | null;
+            /** @description M17 */
+            product?: string;
+            /** @description M17: tool reference (DSC-051) */
+            external_ref?: string | null;
         };
         AssetCreate: {
             slug: components["schemas"]["Slug"];
@@ -859,9 +1348,12 @@ export interface components {
              * @default control8
              * @enum {string}
              */
-            managed_by: "control8" | "argo";
+            managed_by: "control8" | "argo" | "flux" | "helm" | "operator" | "external";
             /** Format: uri */
             external_url?: string;
+            /** @description M17; default unassigned on the legacy namespaced route */
+            product?: string;
+            external_ref?: string;
         };
         AssetUpdate: {
             name?: string;
@@ -870,6 +1362,9 @@ export interface components {
             image_repo?: string;
             /** Format: uri */
             external_url?: string;
+            external_ref?: string;
+            /** @description M17: reassign, global_admin only */
+            product?: string;
         };
         AssetList: {
             items?: components["schemas"]["Asset"][];
@@ -885,6 +1380,12 @@ export interface components {
         Stack: {
             id: string;
             namespace?: string;
+            /** @description M17 */
+            product?: string | null;
+            /** @description M17; = asset */
+            application?: string | null;
+            /** @description M17; null for legacy stacks */
+            environment?: string | null;
             slug: string;
             asset?: string;
             target?: string;
@@ -1022,8 +1523,11 @@ export interface components {
             number?: number;
             runtime?: components["schemas"]["Runtime"];
             safety_profile?: components["schemas"]["SafetyProfile"];
-            /** @enum {string} */
-            origin?: "user" | "image_update";
+            /**
+             * @description adoption from M21
+             * @enum {string}
+             */
+            origin?: "user" | "image_update" | "adoption";
             base_revision?: number | null;
             manifests_input?: string | null;
             compose_input?: string | null;
@@ -1093,8 +1597,15 @@ export interface components {
             id: string;
             namespace?: string;
             stack?: string;
-            /** @enum {string} */
-            action: "apply" | "teardown";
+            /**
+             * @description adopt/release from M21
+             * @enum {string}
+             */
+            action: "apply" | "teardown" | "adopt" | "release";
+            /** @description M17 */
+            product?: string | null;
+            /** @description M17 */
+            environment?: string | null;
             /** @enum {string} */
             trigger?: "manual" | "image_update" | "digest_poll";
             revision?: number | null;
@@ -1124,6 +1635,8 @@ export interface components {
         AccessGrantCreate: {
             target: components["schemas"]["Slug"];
             namespace: components["schemas"]["Slug"];
+            /** @description M17; default unassigned (PRD-022) */
+            product?: components["schemas"]["Slug"];
             reason: string;
             ticket_ref?: string;
             /** @description Capped by C8_GRANT_MAX */
@@ -1135,6 +1648,10 @@ export interface components {
             starts_at?: string;
         };
         AccessGrant: {
+            /** @description M17; legacy grants = unassigned */
+            product?: string;
+            /** @description M17 */
+            environment?: string | null;
             id?: string;
             requester?: string;
             target?: string;
@@ -1184,16 +1701,22 @@ export interface components {
             /** @description Allowed hostPath / bind prefixes; empty = none */
             allowed_bind_prefixes?: string[];
             allow_privileged?: boolean;
+            /** @description M17: products allowed to place apps in this namespace; empty = any */
+            allowed_products?: string[];
         };
         RoleBinding: {
             id?: string;
             idp_group?: string;
             namespace?: string | null;
+            /** @description M17; at most one of namespace/product */
+            product?: string | null;
             role?: components["schemas"]["Role"];
         };
         RoleBindingCreate: {
             idp_group: string;
             namespace?: string | null;
+            /** @description M17 */
+            product?: string | null;
             role: components["schemas"]["Role"];
         };
         /** @description From C8_TOKENS; hash never returned */
@@ -1227,20 +1750,355 @@ export interface components {
             details?: Record<string, never>;
             request_id?: string | null;
         };
-        /** @enum {string} */
-        EventType: "stack.updated" | "stack.removed" | "revision.created" | "deployment.updated" | "access_grant.updated" | "audit.created" | "target.status" | "reset" | "session.ended";
+        /**
+         * @description product.* .. migration.* from M17/M17b; discovery.* from M19/M20
+         * @enum {string}
+         */
+        EventType: "stack.updated" | "stack.removed" | "revision.created" | "deployment.updated" | "access_grant.updated" | "audit.created" | "target.status" | "reset" | "session.ended" | "product.updated" | "product.removed" | "application.updated" | "environment.updated" | "migration.plan.created" | "migration.applied" | "migration.undone" | "discovery.updated" | "discovery.finding";
         Event: {
             type: components["schemas"]["EventType"];
             /** Format: date-time */
             at: string;
             namespace?: string | null;
             /** @description Payload by type (10 catalogue) */
-            data: components["schemas"]["Stack"] | components["schemas"]["Revision"] | components["schemas"]["Deployment"] | components["schemas"]["AccessGrant"] | components["schemas"]["AuditEvent"] | components["schemas"]["Target"] | {
+            data: components["schemas"]["Stack"] | components["schemas"]["Revision"] | components["schemas"]["Deployment"] | components["schemas"]["AccessGrant"] | components["schemas"]["AuditEvent"] | components["schemas"]["Target"] | components["schemas"]["Product"] | components["schemas"]["Asset"] | components["schemas"]["Environment"] | components["schemas"]["MigrationPlan"] | components["schemas"]["MigrationResult"] | components["schemas"]["DiscoveredWorkload"] | components["schemas"]["Finding"] | {
                 namespace: string;
                 slug: string;
             } | {
                 reason: string;
             };
+        };
+        Product: {
+            id?: string;
+            slug?: components["schemas"]["Slug"];
+            name?: string;
+            description?: string | null;
+            owner?: string | null;
+            links?: {
+                label?: string;
+                /** Format: uri */
+                url?: string;
+            }[];
+            /** @description null only for built-in unassigned */
+            approver_group?: string | null;
+            tags?: string[];
+            builtin?: boolean;
+            counts?: {
+                applications?: number;
+                stacks?: number;
+                prod?: number;
+                non_prod?: number;
+                unhealthy?: number;
+                open_findings?: number;
+                active_grants?: number;
+            };
+        };
+        ProductCreate: {
+            slug: components["schemas"]["Slug"];
+            name: string;
+            description?: string;
+            owner?: string;
+            links?: {
+                label?: string;
+                /** Format: uri */
+                url?: string;
+            }[];
+            approver_group: string;
+            tags?: string[];
+        };
+        ProductUpdate: {
+            name?: string;
+            description?: string;
+            owner?: string;
+            links?: {
+                label?: string;
+                /** Format: uri */
+                url?: string;
+            }[];
+            /** @description global_admin only */
+            approver_group?: string;
+            tags?: string[];
+        };
+        ProductList: {
+            items?: components["schemas"]["Product"][];
+            next_cursor?: string | null;
+        };
+        Environment: {
+            id?: string;
+            product?: string;
+            name?: components["schemas"]["Slug"];
+            tier?: components["schemas"]["EnvironmentTier"];
+            target?: string;
+            namespace?: string;
+            order?: number;
+            effective_tier?: components["schemas"]["EnvironmentTier"];
+        };
+        EnvironmentCreate: {
+            name: components["schemas"]["Slug"];
+            tier: components["schemas"]["EnvironmentTier"];
+            target: components["schemas"]["Slug"];
+            namespace: components["schemas"]["Slug"];
+            order?: number;
+            /** @description Product slug; required when tier=prod */
+            confirm_prod?: string;
+        };
+        EnvironmentUpdate: {
+            tier?: components["schemas"]["EnvironmentTier"];
+            target?: components["schemas"]["Slug"];
+            namespace?: components["schemas"]["Slug"];
+            order?: number;
+            confirm_prod?: string;
+        };
+        ProductOverview: {
+            product?: components["schemas"]["Product"];
+            environments?: {
+                /** @description null = legacy column */
+                name?: string | null;
+                tier?: components["schemas"]["EnvironmentTier"];
+                target?: string;
+                namespace?: string;
+                order?: number;
+            }[];
+            applications?: {
+                slug?: string;
+                name?: string;
+                managed_by?: string;
+                cells?: {
+                    environment?: string | null;
+                    target?: string;
+                    namespace?: string;
+                    stack?: string;
+                    state?: string;
+                    safety_profile?: components["schemas"]["SafetyProfile"] | null;
+                    desired_revision?: number | null;
+                    images?: {
+                        container?: string;
+                        image?: string;
+                        digest?: string | null;
+                    }[];
+                    health?: string;
+                    drift_count?: number;
+                    rollout?: {
+                        state?: string;
+                        result?: string | null;
+                    } | null;
+                    pending_grants?: number;
+                    open_findings?: number;
+                }[];
+            }[];
+            totals?: {
+                [key: string]: number;
+            };
+        };
+        MigrationInput: {
+            /** @description Existing slug, or a new product */
+            product: components["schemas"]["Slug"] | components["schemas"]["ProductCreate"];
+            team_binding?: {
+                idp_group?: string;
+                role?: components["schemas"]["Role"];
+            };
+            environments: components["schemas"]["EnvironmentCreate"][];
+            assignments: {
+                /** @enum {string} */
+                kind: "application" | "stack" | "discovered_workload";
+                id: string;
+                environment?: string | null;
+                application?: string | null;
+            }[];
+            /** @description M21 */
+            adopt?: {
+                workloads?: string[];
+                application?: string;
+                environment?: string;
+            }[];
+        };
+        MigrationPlan: {
+            /** @description null for dry-run */
+            id?: string | null;
+            version?: number;
+            /** @enum {string} */
+            status?: "planned" | "applied" | "undone" | "expired";
+            product?: string;
+            changes?: {
+                entity?: string;
+                id?: string | null;
+                /** @enum {string} */
+                action?: "create" | "update" | "move" | "bind";
+                before?: unknown;
+                after?: unknown;
+            }[];
+            approver_resolution?: {
+                stack?: string;
+                before?: string | null;
+                after?: string | null;
+            }[];
+            tier_changes?: {
+                stack?: string;
+                before?: components["schemas"]["EnvironmentTier"];
+                after?: components["schemas"]["EnvironmentTier"];
+            }[];
+            grant_implications?: {
+                grant?: string;
+                effect?: string;
+            }[];
+            findings?: {
+                severity?: string;
+                text?: string;
+            }[];
+            callouts?: {
+                /** @enum {string} */
+                severity?: "info" | "warning" | "danger";
+                /** @enum {string} */
+                effect?: "harder" | "easier" | "neutral";
+                text?: string;
+            }[];
+            warnings?: string[];
+            errors?: string[];
+            requires_confirm_prod?: boolean;
+            created_by?: string;
+            /** Format: date-time */
+            expires_at?: string | null;
+        };
+        MigrationResult: {
+            id?: string;
+            /** @enum {string} */
+            status?: "applied" | "undone";
+            /** Format: date-time */
+            applied_at?: string;
+            /** Format: date-time */
+            undo_until?: string | null;
+            changed?: number;
+            adoption_deployments?: string[];
+        };
+        /** @enum {string} */
+        DiscoveryClass: "managed" | "argo" | "flux" | "helm" | "operator" | "system" | "ungoverned";
+        DiscoveryStatus: {
+            /** @enum {string} */
+            state?: "off" | "syncing" | "on" | "unavailable";
+            reason?: string | null;
+            truncated?: boolean;
+            seen?: number;
+            recorded?: number;
+            excluded?: number;
+            by_class?: {
+                [key: string]: number;
+            };
+        };
+        DiscoveredNamespace: {
+            k8s_namespace?: string;
+            /** @description Mapped Control 8 namespace */
+            namespace?: string | null;
+            /** @enum {string} */
+            mapping?: "explicit" | "implicit" | "none";
+            tier?: components["schemas"]["EnvironmentTier"];
+            system?: boolean;
+            by_class?: {
+                [key: string]: number;
+            };
+        };
+        DiscoveredWorkload: {
+            id?: string;
+            target?: string;
+            k8s_namespace?: string;
+            kind?: string;
+            name?: string;
+            class?: components["schemas"]["DiscoveryClass"];
+            tool_ref?: string | null;
+            namespace?: string | null;
+            product?: string | null;
+            application?: string | null;
+            tier?: components["schemas"]["EnvironmentTier"];
+            images?: {
+                container?: string;
+                image?: string;
+            }[];
+            desired_replicas?: number;
+            ready_replicas?: number;
+            open_findings?: number;
+            /** Format: date-time */
+            first_seen?: string;
+            /** Format: date-time */
+            last_seen?: string;
+            /** Format: date-time */
+            last_changed?: string;
+            gone?: boolean;
+        };
+        DiscoveredWorkloadList: {
+            items?: components["schemas"]["DiscoveredWorkload"][];
+            next_cursor?: string | null;
+        };
+        /** @enum {string} */
+        FindingType: "ungoverned_in_prod" | "ungoverned_non_prod" | "image_registry_not_allowed" | "privileged_workload" | "host_path_mount" | "argo_unlinked";
+        Finding: {
+            id?: string;
+            type?: components["schemas"]["FindingType"];
+            /** @enum {string} */
+            severity?: "high" | "medium" | "low" | "info";
+            /** @enum {string} */
+            state?: "open" | "resolved";
+            workload?: components["schemas"]["DiscoveredWorkload"];
+            product?: string | null;
+            namespace?: string | null;
+            tier?: components["schemas"]["EnvironmentTier"];
+            details?: Record<string, never>;
+            /** Format: date-time */
+            first_seen?: string;
+            /** Format: date-time */
+            last_seen?: string;
+            /** Format: date-time */
+            resolved_at?: string | null;
+            reopened_count?: number;
+            acknowledgement?: {
+                by?: string;
+                reason?: string;
+                /** Format: date-time */
+                at?: string;
+                /** Format: date-time */
+                expires_at?: string | null;
+            } | null;
+        };
+        FindingList: {
+            items?: components["schemas"]["Finding"][];
+            next_cursor?: string | null;
+        };
+        AdoptionCreate: {
+            target: components["schemas"]["Slug"];
+            k8s_namespace: string;
+            /** @description DiscoveredWorkload ids */
+            workloads: string[];
+            companions?: {
+                kind: string;
+                name: string;
+            }[];
+            product: components["schemas"]["Slug"];
+            /** @description Existing slug or new */
+            application: components["schemas"]["Slug"] | {
+                slug: components["schemas"]["Slug"];
+                name: string;
+            };
+            environment?: components["schemas"]["Slug"];
+            stack: components["schemas"]["Slug"];
+            /** @default as_is */
+            safety_profile: components["schemas"]["SafetyProfile"];
+        };
+        Adoption: {
+            id?: string;
+            /** @enum {string} */
+            status?: "planned" | "executing" | "executed" | "failed" | "expired";
+            product?: string;
+            application?: string;
+            stack?: string;
+            /** @description Sanitised revision-1 YAML */
+            manifests?: string;
+            /** @description Unified diff live vs after (metadata labels only) */
+            diff?: string;
+            policy_result?: components["schemas"]["PolicyResult"];
+            warnings?: string[];
+            requires_grant?: boolean;
+            environment_tier?: components["schemas"]["EnvironmentTier"];
+            deployment?: string | null;
+            /** Format: date-time */
+            expires_at?: string;
         };
         AuditList: {
             items?: components["schemas"]["AuditEvent"][];
@@ -1264,6 +2122,7 @@ export interface components {
         id: string;
         limit: number;
         cursor: string;
+        product: components["schemas"]["Slug"];
     };
     requestBodies: never;
     headers: never;
@@ -2463,6 +3322,950 @@ export interface operations {
                     "application/json": components["schemas"]["AuditList"];
                 };
             };
+        };
+    };
+    listProducts: {
+        parameters: {
+            query?: {
+                tag?: string;
+                limit?: components["parameters"]["limit"];
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductList"];
+                };
+            };
+        };
+    };
+    createProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+        };
+    };
+    deleteProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProductUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    listApplications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetList"];
+                };
+            };
+        };
+    };
+    createApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    getApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                app: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    deleteApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                app: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                app: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Asset"];
+                };
+            };
+        };
+    };
+    placeApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                app: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    environment: components["schemas"]["Slug"];
+                    slug?: components["schemas"]["Slug"];
+                };
+            };
+        };
+        responses: {
+            /** @description Draft stack */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stack"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    listEnvironments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["Environment"][];
+                    };
+                };
+            };
+        };
+    };
+    createEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvironmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environment"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    getEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                env: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environment"];
+                };
+            };
+        };
+    };
+    deleteEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                env: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    updateEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                env: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvironmentUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environment"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    getProductOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matrix */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductOverview"];
+                };
+            };
+        };
+    };
+    dryRunMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrationInput"];
+            };
+        };
+        responses: {
+            /** @description Plan (not stored) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    createMigrationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrationInput"];
+            };
+        };
+        responses: {
+            /** @description Stored plan */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getMigrationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationPlan"];
+                };
+            };
+        };
+    };
+    applyMigrationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Product slug; required when the plan creates or raises prod tier */
+                    confirm_prod?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    undoMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Undone */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationResult"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    getTargetDiscovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryStatus"];
+                };
+            };
+        };
+    };
+    listDiscoveredNamespaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: components["schemas"]["Slug"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["DiscoveredNamespace"][];
+                    };
+                };
+            };
+        };
+    };
+    setNamespaceMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: components["schemas"]["Slug"];
+                k8s_ns: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    namespace: components["schemas"]["Slug"];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveredNamespace"];
+                };
+            };
+        };
+    };
+    deleteNamespaceMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: components["schemas"]["Slug"];
+                k8s_ns: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listDiscoveredWorkloads: {
+        parameters: {
+            query?: {
+                target?: string;
+                namespace?: string;
+                k8s_namespace?: string;
+                class?: components["schemas"]["DiscoveryClass"];
+                tier?: components["schemas"]["EnvironmentTier"];
+                product?: string;
+                kind?: string;
+                q?: string;
+                include_gone?: boolean;
+                limit?: components["parameters"]["limit"];
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveredWorkloadList"];
+                };
+            };
+        };
+    };
+    getDiscoveredWorkload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveredWorkload"];
+                };
+            };
+        };
+    };
+    assignDiscoveredWorkloads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    workloads: string[];
+                    product: components["schemas"]["Slug"];
+                };
+            };
+        };
+        responses: {
+            /** @description Assigned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveredWorkloadList"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    listFindings: {
+        parameters: {
+            query?: {
+                target?: string;
+                namespace?: string;
+                product?: string;
+                type?: components["schemas"]["FindingType"];
+                severity?: "high" | "medium" | "low" | "info";
+                state?: "open" | "resolved";
+                acknowledged?: boolean;
+                limit?: components["parameters"]["limit"];
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingList"];
+                };
+            };
+        };
+    };
+    getFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+        };
+    };
+    acknowledgeFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    /**
+                     * Format: date-time
+                     * @description At most 90 days ahead
+                     */
+                    expires_at?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    unacknowledgeFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+        };
+    };
+    planAdoption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdoptionCreate"];
+            };
+        };
+        responses: {
+            /** @description Plan */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adoption"];
+                };
+            };
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    getAdoption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Adoption"];
+                };
+            };
+        };
+    };
+    executeAdoption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    confirm_environment_tier: components["schemas"]["EnvironmentTier"];
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Adopt deployment */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deployment"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    releaseStack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["ns"];
+                stack: components["parameters"]["stack"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    confirm_environment_tier: components["schemas"]["EnvironmentTier"];
+                };
+            };
+        };
+        responses: {
+            /** @description Release deployment */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deployment"];
+                };
+            };
+            403: components["responses"]["Problem"];
         };
     };
     getStackParachute: {

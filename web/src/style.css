@@ -1,5 +1,5 @@
 @import "tailwindcss";
-/* Themes are compiled in (no runtime injection). The switcher offers exactly these; see decision D-104. */
+/* Themes are compiled in (no runtime injection). The switcher offers exactly these; see decision D-125. */
 @plugin "daisyui" {
   themes: light --default, dark --prefersdark, corporate, business, nord;
 }
@@ -14,7 +14,7 @@
   --color-info: oklch(45% 0.15 240);
   --color-info-content: oklch(98% 0 0);
 }
-/* The same contrast guard for the other switcher themes (axe 4.5:1 for coloured text on the page surface; D-104). */
+/* The same contrast guard for the other switcher themes (axe 4.5:1 for coloured text on the page surface; D-125). */
 @plugin "daisyui/theme" {
   name: "corporate";
   --color-error: oklch(50% 0.21 27);
