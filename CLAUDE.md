@@ -26,11 +26,13 @@ Governance control plane for Kubernetes: namespaces, asset catalog, raw-manifest
 - The UI is a React + Vite + TS SPA in `web/`, embedded via `go:embed`; it uses only the public `/api/v1` API and `GET /api/v1/events` (generated client, no UI-only endpoints). No interval polling where an event exists.
 - Cluster state comes from shared informers (watch); list polling is only a fallback/resync. Never list the API server per change.
 - SQLite stays; events are in-memory only (replay buffer).
+- Products (M17+, `docs/specs/12-products.md`): prod grants are scoped (target, namespace, product); the approver group comes from the product (only the built-in `unassigned` product falls back to the namespace group). Effective role = highest of global, namespace and product bindings. Effective tier = strictest of environment, namespace, target (`staging` is prod by default). Migrations are plan → apply in one transaction, audited per entity, never touch a cluster except explicit adoption items.
+- Discovery (M19+, `docs/specs/11-discovery.md`) is read-only: separate informers, never Secrets/ConfigMaps, findings never block or write. Only an adopt deployment may label pre-existing objects (metadata only, planned uids, no pod-template change, generation must not change); never adopt tool-managed (Argo/Flux/Helm/operator) objects; never force.
 - No new dependencies or scope beyond v1 without a decision-log row in `docs/specs/README.md`.
 
 ## Build workflow
 
-1. Follow `docs/specs/07-roadmap.md` milestone by milestone (M0..M16; Docker track D1..D3 only when the owner asks); one milestone per session.
+1. Follow `docs/specs/07-roadmap.md` milestone by milestone (M0..M16 built; then M17, M17b, M18, M18b, M19..M21; Docker track D1..D3 only when the owner asks); one milestone per session.
 2. Read the specs the milestone cites first; meet its acceptance criteria; cite requirement IDs in tests.
 3. `make test` (and `make test-k8s` against kind where the milestone needs a cluster; `make web-test` / `make e2e` from M13) must pass before a milestone is done.
 4. If a spec is ambiguous, choose the smallest reading and record it in the decision log.

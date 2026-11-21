@@ -1,6 +1,6 @@
 # 07 Roadmap
 
-One milestone per session. Each is independently shippable: `make test` green, `docker compose -f deploy/compose.yaml up` still works, nothing half-wired. Do them in order. Do not start M(n+1) work inside M(n). Kubernetes and prod governance come first (M0–M16 = v1); the Docker + Parachute track (D1–D3) is later and optional.
+One milestone per session. Each is independently shippable: `make test` green, `docker compose -f deploy/compose.yaml up` still works, nothing half-wired. Do them in order. Do not start M(n+1) work inside M(n). Kubernetes and prod governance come first (M0–M16 = v1; post-v1 M17–M21 below); the Docker + Parachute track (D1–D3) is later and optional.
 
 ## Rules for every milestone
 
@@ -125,6 +125,63 @@ Tests: Vitest for forms/validation; Playwright scenarios above.
 
 Scope: security headers (CSP per UI-005, nosniff, referrer-policy); output redaction check; event payload review (AUTH-043); `scripts/smoke.sh` end-to-end on kind; CI (unit, `k8s` on kind, web, e2e, image push on tag); `docs/ops/install.md` (compose and in-cluster, reverse-proxy note: disable buffering for `/api/v1/events`), `docs/ops/prod-rbac.md` reviewed.
 Acceptance: smoke passes on a clean machine; manual security checklist in PR; image published for a tag.
+
+## Post-v1: Products (M17–M18b) and discovery (M19–M21)
+
+Order: products first (the frame), then discovery. Same rules R-1..R-8. Every new route lands with its `x-milestone` marker removed in openapi (API-002). Kind fixtures for M19–M21 live in `internal/discovery/testdata/kind/` and are applied by the `k8s` tests.
+
+## M17 — Products, applications, environments; approver and grant rework (backend)
+
+Scope: 12 PRD-001..006, 010..014, 020..024, 030..031, 040..046: `product`, `environment` tables; asset → application (`product_id`, `home_namespace_id`, extended `managed_by`, `external_ref`); migration to built-in `unassigned` with collision renames (PRD-003); product role bindings + AUTH-024 resolution; `allowed_products` (POL-R15); grant scope (target, namespace, product), approver resolution with `unassigned` fallback, `approver_for_products`; product/application/environment routes, place-app route, product overview matrix; `product.*`, `application.updated`, `environment.updated` events; product role holders receive stack events; `C8_ENVIRONMENT_PRESETS`; smoke/e2e fixtures create product `shop` with dev/staging/prod.
+Acceptance:
+- Migration on a copy of an M16 DB: every asset in `unassigned`, colliding slugs renamed and audited, existing grants keep working for those apps, role bindings unchanged; running it twice is a no-op.
+- httptest matrix (binding kind global/namespace/product × resource stack/namespace/product × role) asserts AUTH-024 precedence, including product operator deploying in two namespaces without namespace bindings, and 403 when `allowed_products` excludes the product.
+- Approver resolution table test: product group approves; namespace group cannot approve a non-`unassigned` product; `unassigned` app uses namespace group; product without group impossible (400 on create).
+- A grant for product A in namespace N does not let a user deploy product B's app in N (403 `grant_required`).
+- `staging` environment on a non-prod namespace makes the stack prod (grant required); lowering a tier needs global_admin.
+- Kind e2e: one app placed into two environments (dev, staging) on kind, both deployed; `GET /products/shop/overview` shows both cells with image/digest, health and rollout state; an SSE subscriber with only a product binding receives both stacks' events.
+Tests: SQL migration tests on a fixture DB; httptest matrices; `k8s` e2e as above.
+
+## M17b — Migration assistant backend
+
+Scope: 12 MIG-001..011 (adoption items stubbed until M21): migration plan storage, dry-run, stored plan with row versions, apply in one transaction, per-entity audit with `migration_id`, undo within `C8_MIGRATION_UNDO_WINDOW`, `migration.*` events, approver-group warning from cached claims, typed `confirm_prod`, permissions MIG-008; overview count of apps needing migration in `GET /products` (built-in `unassigned` counts).
+Acceptance (httptest, seeded DB with several `unassigned` applications across three namespaces and stacks on two targets):
+- dry-run returns changes, approver resolution before/after, tier changes and "harder/easier" callouts; nothing is written.
+- plan → apply creates product, environments (dev/uat non-prod, staging/prod prod), moves applications, sets `stack.environment_id`, creates the team binding; afterwards the approver of those stacks resolves to the product group and effective tiers match.
+- apply without `confirm_prod` when prod is involved → 400; re-apply of an applied plan → same result, no duplicate rows; a row changed between plan and apply → 409 `plan_stale`.
+- undo restores the previous state (products/environments deleted if empty); undo after a later change to a touched row → 409 `undo_conflict`.
+- a product admin who is not admin of every source namespace cannot claim those apps (403).
+Tests: unit for plan computation (pure over a snapshot) and reverse-plan generation; httptest as above.
+
+## M18 — Products UI
+
+Scope: 06 "Products" (UI-040..043): Products list, product page tabs (Applications, Environments matrix, Deployments, Access/Grants, Settings; Findings tab placeholder until M20), application page, breadcrumbs, deploy-to-another-environment flow, product-level role binding management on Access tab, overview product roll-up and "needs migrating" card. Live via existing and M17 events.
+Acceptance (Playwright on kind): product list cards show counts; matrix shows the app in dev and staging with live rollout progress after a deploy; "Deploy here" into an empty uat cell copies the source revision and deploys; staging cell shows PROD tier badge and the grant prompt; product binding added on Access tab lets a second user see the product; axe passes.
+Tests: Vitest for matrix cell reducer (stack/deployment/grant events), Playwright scenarios above.
+
+## M18b — Migration wizard UI
+
+Scope: 06 "Migration wizard": `/products/migrate`, five steps with dry-run on every change, suggestions by name match, tier alerts, bulk assignment table, review with collapses/diff and harder/easier callouts, typed confirm, progress, undo button, `plan_stale` handling, `sessionStorage` resume; entry from overview card.
+Acceptance (Playwright, seeded unassigned assets): happy path creates product `shop` with dev/uat/staging/prod mapped to suggested namespaces, assigns three apps, applies; overview card count drops to 0; undo restores them; editing a seeded row in another tab before apply shows the stale alert; staging tier change shows the PROD alert.
+Tests: Vitest for step validation and suggestion matching; Playwright as above.
+
+## M19 — Discovery backend
+
+Scope: 11 DSC-001..008, 010..011, 020..024: per-target discovery informers with transforms, status, cap/truncation, system/exclude namespaces; `discovery.Classify`; `namespace_mapping`, `discovered_workload`, `discovered_assignment` tables; mapping + read-model + assign routes; `discovery.updated` events; `Target.discovery`; `deploy/kubernetes/rbac-discovery.yaml`; `docs/ops/prod-rbac.md` update (DSC-056); config vars.
+Acceptance (kind, `k8s` tag): in prod-tier namespace `shop` create an unlabelled Deployment, an Argo-labelled Deployment, a Helm-labelled Deployment, a Deployment owned by a fake CR (ownerReference `example.com/v1 Widget`), a CronJob with a Job, and a bare Pod; plus a Control 8-deployed stack. Assert classes `ungoverned`, `argo`, `helm`, `operator` (root owner Widget), `managed`; CronJob listed once (Job folded); bare Pod listed; kube-system workloads class `system` collapsed; no Secret/ConfigMap watch (RBAC without them still `on`); removing the discovery ClusterRoleBinding → `discovery: unavailable` while deploys still work; `C8_DISCOVERY_MAX=3` → `truncated: true`; scaling a workload emits one coalesced `discovery.updated`; a namespace viewer of `shop` sees the workloads, a viewer of another namespace does not; bulk assign to product `shop` is audited and survives restart.
+Tests: table tests for `Classify` (fixture YAML per class and precedence ties) and transforms (memory: no managedFields/spec remnants); `k8s` suite above.
+
+## M20 — Findings, acknowledgements, webhook, Cluster and Findings UI
+
+Scope: 11 DSC-030..035 (findings computed from the read model via policy rule functions), `finding` table, findings routes, acknowledge/unacknowledge with expiry sweeper, `finding.opened` webhook for new high findings, `discovery.finding` events, product roll-up (`open_findings` in PRD-030), `docs/ops/admission.md` (DSC-060); UI: Cluster page, Findings page, overview "Ungoverned in prod: N" card, product Findings tab.
+Acceptance (kind, same fixtures): unlabelled Deployment in prod namespace → `ungoverned_in_prod` (high) and one signed webhook; same in a non-prod namespace → `ungoverned_non_prod` (info), no webhook; image from a non-allowed registry → `image_registry_not_allowed`; `privileged: true` → `privileged_workload`; hostPath → `host_path_mount`; Argo workload without matching application → `argo_unlinked`, resolved after registering one (M21) or a fixture application; deleting the workload resolves its findings; acknowledging with expiry in the past (fake clock) reopens; Playwright: Cluster page shows class badges, counts and truncated banner; overview card count updates live when a new ungoverned prod Deployment is created; axe passes.
+Tests: pure tests for finding computation; httptest for ack rules and webhook HMAC; `k8s` + Playwright as above.
+
+## M21 — Adoption and register-only (+ dialogs and wizard integration)
+
+Scope: 11 DSC-039..051, K8S-045: adoption plans (capture, sanitise, render, policy, dry-run generation check, ownership check + `csaupgrade` migration), execute as `adopt` deployment (grant gate, idempotent/resumable), `release` action, register-only via product applications, workload↔application links; wizard adoption items (MIG-001/005); UI adopt and register dialogs, Cluster "Adopt…" into the wizard.
+Acceptance (kind, same fixtures): plan for the unlabelled Deployment + its Service in a prod namespace shows sanitised manifests (no status/uid/clusterIP), policy allowed, `requires_grant`; execute without grant → 403 `grant_required`; with a grant → objects gain `control-8/*` labels, pod template unchanged, **no new ReplicaSet** (pod names unchanged), `metadata.generation` unchanged, stack `active` rev 1, workload class becomes `managed` and its findings resolve; re-executing is a no-op; a `kubectl edit`-owned field is migrated and a following image update deploys without `ownership_conflict`; a field owned by a non-allow-listed manager → 409 `ownership_conflict`; Argo/Helm/operator workloads → 409 `tool_managed`; a Secret in the set → 422; release removes labels, pods keep running, workload back to `ungoverned`; register the Argo workload under product `shop` → `argo_unlinked` resolves; Playwright: adopt from Cluster page through the wizard to a running adopted stack.
+Tests: sanitiser table tests (per kind), ownership-migration unit test with fake managedFields, `k8s` suite, Playwright.
 
 ## Docker track (later, optional — after v1)
 

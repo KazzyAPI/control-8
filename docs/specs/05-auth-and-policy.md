@@ -41,11 +41,13 @@ No custom identity product: OIDC for humans, scoped tokens for agents, one break
 | `operator` | viewer + register/update assets, create stacks/revisions, request deployments, teardowns and image updates (prod: with a grant), request access grants, cancel own requests |
 | `admin` | operator + approve/reject deployments (not own; prod: with a grant), clear `rollout_frozen` by deploying, edit namespace policy, delete assets |
 | `global_admin` | admin on all namespaces + namespaces CRUD, tiers, `approver_group`, global policy, role bindings, all audit (targets and tokens are config, D-49/D-11) |
-| *approver-group member* | Not a role: member of `namespace.approver_group` (the owning product team's OIDC group). Can see that namespace's grants and approve/deny/revoke others' grants for it (09). Gives no deploy right by itself |
+| *approver-group member* | Not a role: member of the resolved approver group of a grant — the **product's** `approver_group` (since M17, PRD-021), or `namespace.approver_group` for apps of the built-in `unassigned` product. Approves/denies/revokes others' grants for that scope (09). Gives no deploy right by itself |
 
 | ID | Rule |
 |---|---|
 | AUTH-020 | `role_binding(idp_group, namespace|null, role)`. Effective role per namespace = highest of all bindings matching any of the user's groups; `namespace=null` + `global_admin` = global admin; `null` namespace with another role applies to every namespace. |
+| AUTH-024 | Since M17 (PRD-010/011): bindings may target a **product** (at most one of namespace/product). Effective role on a stack = highest of global, `stack.namespace` and the stack's product bindings; on a namespace = global + namespace; on a product/application = global + product. Highest wins, no deny. Tests: httptest matrix (binding kind × resource kind × role). |
+| AUTH-025 | Discovery (M19+): discovered workloads and findings are visible per DSC-022/024 (mapped-namespace viewers, product role holders for attributed workloads, `global_admin` for unmapped/system). Namespace mappings and discovery settings are `global_admin`. Adoption needs `operator` on the product + `allowed_products`; prod adoption/release are grant-gated (DSC-045/049). Migration plans: MIG-008. |
 | AUTH-021 | Bootstrap: `C8_BOOTSTRAP_ADMIN_GROUP` (optional) — on startup, if no `global_admin` binding exists, create one for that group. Otherwise use break-glass. |
 | AUTH-022 | Role checks live in `authz.Require(principal, namespaceID, role)`; prod checks in `grants.Require(principal, stack)` (ARC-004). Handlers call them before any work. Denials are audited (`outcome=denied`). |
 | AUTH-023 | Approver-group membership comes only from IdP groups (no role binding, no token). Approval actions require a session (tokens → 403 `token_not_allowed`). |
@@ -77,7 +79,7 @@ Later (not v1): token minting/revocation via API/UI.
 | ID | Rule |
 |---|---|
 | AUTH-040 | `GET /api/v1/events` accepts the session cookie or a bearer token; same principal resolution as REST. |
-| AUTH-041 | Each event is delivered only if the principal could `GET` the resource now (10 filter table): namespace role ≥ viewer; grants to requester, namespace `approver_for` members and global_admin; global audit to global_admin. No event bypasses `authz.Require`. |
+| AUTH-041 | Each event is delivered only if the principal could `GET` the resource now (10 filter table): namespace role ≥ viewer; grants to requester, namespace `approver_for` members and global_admin; global audit to global_admin. No event bypasses `authz.Require`. | Since M17, holders of a product role also receive the stack/deployment/revision events of that product's stacks and `product.*`/`application.*`/`environment.*` events (PRD-011).
 | AUTH-042 | Roles are re-read on each event (cheap, cached per principal for 10 s), so a role binding removal stops delivery within 10 s; session/token invalidation closes the stream at the next heartbeat (EVT-014). |
 | AUTH-043 | Payloads never contain secrets, token hashes, kubeconfig references beyond what REST returns, or deployment output. |
 
@@ -96,6 +98,7 @@ Policies exist at `global` scope (one row, seeded with defaults) and per `namesp
 | `allowed_safety_profiles` | []profile | `["managed_rollout","as_is","parachute"]` | intersection |
 | `allowed_bind_prefixes` | []string abs paths | `[]` | intersection (namespace within global). Governs Kubernetes `hostPath` and Docker bind mounts |
 | `allow_privileged` | bool | `false` | AND |
+| `allowed_products` | []product slug | `[]` (= any) | intersection (M17, PRD-012) |
 
 ### Rule evaluation (per revision)
 
@@ -112,6 +115,7 @@ Policies exist at `global` scope (one row, seeded with defaults) and per `namesp
 | POL-R12 | Every kind in K8S-021 allow-list; no cluster-scoped objects | kubernetes | `kind_not_allowed` |
 | POL-R13 | Mapped Kubernetes namespace matches `allowed_k8s_namespaces` (if non-empty) and is not `kube-*` or `default` (always); manifest `metadata.namespace` empty or equal (K8S-022) | kubernetes | `namespace_not_allowed` |
 | POL-R14 | No `Secret` objects (K8S-023) | kubernetes | `kind_not_allowed` |
+| POL-R15 | Placing an application in a namespace: its product ∈ `allowed_products` (if non-empty) | both | 403 `product_not_allowed_in_namespace` (checked at stack create, PRD-012) |
 | POL-R5, R8, R11 | *(Docker track)* digest-pinned refs on `parachute`, Parachute configured, no `build:` (04) | docker | as in 04 |
 
 Violations block (DOM-003). `requires_approval` creates the deployment as `pending_approval`; an `admin` other than the requester approves (DOM-004), with a grant on prod.

@@ -17,6 +17,7 @@ Conventions: IDs are `<prefix>_<16 base32 lowercase>` (D-24). Times are RFC 3339
 | parachute_host | text | *(docker)* name Parachute uses (`local`) |
 | reachable | bool | Last reachability check (K8S-003) |
 | sync | enum | `syncing` \| `watching` \| `polling` \| `down` (K8S-064) |
+| discovery | enum | `off` \| `syncing` \| `on` \| `unavailable` (DSC-003, M19); plus `discovery_reason`, `discovery_truncated`, `discovery_seen`, `discovery_recorded` |
 | last_error | text | Redacted error from last check |
 | last_seen_at | time | |
 
@@ -25,22 +26,42 @@ Conventions: IDs are `<prefix>_<16 base32 lowercase>` (D-24). Times are RFC 3339
 |---|---|---|
 | id, slug, display_name | text | `slug` unique, immutable; = Kubernetes namespace name (K8S-010) |
 | environment_tier | enum | `prod` \| `non-prod` |
-| approver_group | text | OIDC group of the owning product team whose members approve grants (09); required when tier is `prod`; set by `global_admin` only |
+| approver_group | text | Since M17 only the **fallback** approver group for apps of the built-in `unassigned` product (PRD-021); still required when tier is `prod`; set by `global_admin` only |
 | description | text | optional |
 
-### asset (`ast_`)
+### product (`prd_`) — M17, 12
 | Field | Type | Notes |
 |---|---|---|
-| id, namespace_id, slug | text | (`namespace_id`,`slug`) unique |
+| id, slug | text | `slug` globally unique, immutable; built-in `unassigned` |
+| name, description, owner | text | `owner` = team, free text |
+| links | json | `[{label, url}]` |
+| approver_group | text | Product team's OIDC group; approves prod grants for its apps (PRD-021); required except `unassigned`; `global_admin` only |
+| tags | json | `[]string` |
+
+### environment (`env_`) — M17, 12
+| Field | Type | Notes |
+|---|---|---|
+| id, product_id, name | text | (`product_id`,`name`) unique; presets dev/uat/staging/prod |
+| tier | enum | `prod` \| `non-prod`; `staging` defaults to prod (PRD-042) |
+| target_id, namespace_id | text | Placement; (`product_id`,`target_id`,`namespace_id`) unique (PRD-040) |
+| order | int | Matrix column order |
+
+### asset (`ast_`) — "application" in API/UI since M17
+| Field | Type | Notes |
+|---|---|---|
+| id, product_id, slug | text | (`product_id`,`slug`) unique (PRD-002) |
+| home_namespace_id | text | Legacy (was `namespace_id`); null for applications created after M17 |
 | name, description, owner | text | `owner` free text |
 | image_repo | text | informational + policy hint |
-| managed_by | enum | `control8` \| `argo` |
-| external_url | text | Argo app URL when `argo`; else null |
+| managed_by | enum | `control8` \| `argo` \| `flux` \| `helm` \| `operator` \| `external` (non-`control8` = register-only, PRD-005) |
+| external_ref | text | Tool reference (Argo app, Helm release, Flux object, operator root owner); links discovered workloads (DSC-051) |
+| external_url | text | Link to the tool's UI; else null |
 
 ### stack (`stk_`)
 | Field | Type | Notes |
 |---|---|---|
 | id, namespace_id, asset_id, target_id, slug | text | (`namespace_id`,`slug`) unique |
+| environment_id | text | M17: product environment of this placement; null for legacy stacks (PRD-044) |
 | runtime | enum | `kubernetes` \| `docker`; = `target.kind`, immutable (K8S-004) |
 | k8s_namespace | text | kubernetes: = namespace slug |
 | compose_project | text | *(docker)* `c8-<ns>-<stack>`, unique, immutable |
@@ -61,7 +82,8 @@ Immutable once created.
 | id, stack_id | text | |
 | number | int | 1..n per stack |
 | safety_profile | enum | `managed_rollout` \| `as_is` (kubernetes); `parachute` \| `as_is` (docker). Required, no default |
-| origin | enum | `user` \| `image_update` |
+| origin | enum | `user` \| `image_update` \| `adoption` |
+| template_labels | bool | false only for an adoption revision (DSC-043); true otherwise |
 | base_revision | int | For `image_update`: revision it was derived from |
 | manifests_input | text | kubernetes: user YAML as submitted |
 | compose_input, compose_normalized | text, json | *(docker)* |
@@ -79,7 +101,7 @@ Immutable once created.
 | Field | Type | Notes |
 |---|---|---|
 | id, stack_id, revision_id | text | `revision_id` null for teardown |
-| action | enum | `apply` \| `teardown` |
+| action | enum | `apply` \| `teardown` \| `adopt` \| `release` (M21, DSC-045/049) |
 | trigger | enum | `manual` \| `image_update` \| `digest_poll` |
 | status | enum | see below |
 | requested_by, approved_by | text | `approved_by` ≠ `requested_by` (4-eyes) |
@@ -107,7 +129,53 @@ Immutable once created.
 | observed_at | time | |
 
 ### access_grant (`agr_`)
-Fields, states and rules in 09. Never deleted.
+Fields, states and rules in 09. Never deleted. Since M17 adds `product_id` (scope = target, namespace, product; PRD-020; legacy rows = `unassigned`) and `approver_group` (resolved snapshot).
+
+### namespace_mapping — M19
+| Field | Notes |
+|---|---|
+| target_id, k8s_namespace, namespace_id | Unique (target, k8s_namespace). Explicit override of the implicit slug match (DSC-020) |
+
+### discovered_workload (`dwl_`) — M19, read model
+| Field | Notes |
+|---|---|
+| id, target_id, k8s_namespace, kind, name | Unique (target, k8s_namespace, kind, name) |
+| uid | Live object uid |
+| class, tool_ref | DSC-010 |
+| namespace_id | Mapped Control 8 namespace or null |
+| product_id, asset_id | Attribution (DSC-024): linked application or assignment, else null |
+| tier | Effective (DSC-021) |
+| images | json `[{container, image}]` |
+| desired_replicas, ready_replicas | |
+| security | json: privileged/host namespaces/caps/hostPorts/hostPaths summary (for findings) |
+| first_seen, last_seen, last_changed | |
+| gone, gone_at | DSC-023 |
+
+### discovered_assignment — M19
+| Field | Notes |
+|---|---|
+| target_id, k8s_namespace, kind, name, product_id, assigned_by | Survives read-model purge; applied on recompute (DSC-024) |
+
+### finding (`fnd_`) — M20
+| Field | Notes |
+|---|---|
+| id, workload_id, type | Unique (workload, type) |
+| severity | `high` \| `medium` \| `low` \| `info` |
+| state | `open` \| `resolved` (acknowledgement is separate) |
+| product_id, namespace_id, target_id, tier | Denormalized for filters/roll-ups |
+| details | json (e.g. offending image, rule) |
+| first_seen, last_seen, resolved_at, reopened_count | |
+| ack_by, ack_reason, ack_at, ack_expires_at | DSC-032 |
+
+### adoption (`adp_`) — M21
+| Field | Notes |
+|---|---|
+| id, target_id, k8s_namespace, product_id, asset_slug, stack_slug, safety_profile | Plan input |
+| objects | json `[{kind, name, uid, resource_version}]` |
+| manifests, diff, policy_result, warnings | Plan output (DSC-041/042) |
+| requires_grant | bool |
+| status | `planned` \| `executing` \| `executed` \| `failed` \| `expired` |
+| deployment_id, created_by, expires_at | |
 
 ### audit_event (integer `id` autoincrement)
 | Field | Type | Notes |
@@ -137,7 +205,7 @@ Fields, states and rules in 09. Never deleted.
 |---|---|
 | user | id, issuer, subject (unique together), email, display_name, groups (json, last login), is_break_glass, last_login_at |
 | session | id_hash, user_id, csrf_token, auth_method, expires_at (8 h; break-glass 1 h), created_at |
-| role_binding | id, idp_group, namespace_id (null = global), role (`viewer`\|`operator`\|`admin`\|`global_admin`) |
+| role_binding | id, idp_group, namespace_id, product_id (at most one set; both null = global; product since M17, PRD-010), role (`viewer`\|`operator`\|`admin`\|`global_admin`) |
 | token | id, name, hash, owner_sub, owner_user_id (resolved, null if unknown), namespace_id (null = all the owner's namespaces), role, expires_at, last_used_at, revoked_at. Synced from `C8_TOKENS` at startup; never written by the API (AUTH-033) |
 
 ### safety_profile (enum, not a table)
@@ -174,7 +242,7 @@ Created as `pending_approval` when `policy_result.requires_approval` (or teardow
 | DOM-002 | Revisions are immutable; a change creates `number = max+1`. |
 | DOM-003 | A revision with `policy_result.allowed=false` can never be deployed. |
 | DOM-004 | `approved_by` ≠ `requested_by`; break-glass may approve only when it is not also the requester. |
-| DOM-005 | `asset.managed_by=argo` ⇒ no stack rows reference it. |
+| DOM-005 | `asset.managed_by ≠ control8` ⇒ no stack rows reference it. |
 | DOM-006 | `namespace.slug`, `stack.runtime`, `stack.target_id`, `stack.compose_project` never change. |
 | DOM-007 | `service` rows are derived; only sync writes them. |
 | DOM-008 | `audit_event` has no UPDATE or DELETE path in code; a SQLite trigger raises on UPDATE/DELETE. |
@@ -182,5 +250,7 @@ Created as `pending_approval` when `policy_result.requires_approval` (or teardow
 | DOM-010 | Secret values, kubeconfig contents and token plaintexts are never stored or logged. |
 | DOM-011 | Deleting a namespace (409) or removing a target from config (exit 2) requires no non-`removed` stacks. |
 | DOM-012 | `stack.safety_profile` = profile of revision `desired_revision`; profile is valid for `stack.runtime`. |
-| DOM-013 | A deployment on a prod stack has `grant_id` or `grant_bypass` set; the grant's requester = the acting user (token owner for tokens) and its scope = stack's (target, namespace). |
-| DOM-014 | `access_grant.approver_id` ≠ `requester_id`, and the approver was a member of the namespace's `approver_group` at decision time. |
+| DOM-013 | A deployment on a prod stack has `grant_id` or `grant_bypass` set; the grant's requester = the acting user (token owner for tokens) and its scope = stack's (target, namespace, product). |
+| DOM-014 | `access_grant.approver_id` ≠ `requester_id`, and the approver was a member of the grant's resolved approver group (product's, or namespace's for `unassigned`, PRD-021) at decision time. |
+| DOM-015 | Every asset has a product; the built-in `unassigned` product cannot be deleted. |
+| DOM-016 | `discovered_workload`, `finding` rows are derived; only the discovery pipeline writes them (acknowledgement fields excepted). |

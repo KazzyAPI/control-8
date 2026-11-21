@@ -10,7 +10,7 @@ Everything in the UI is live. State changes publish to an in-process **event bus
 | EVT-002 | Event IDs are a process-wide monotonic `uint64`, assigned at publish. After a restart IDs start again from the Unix-ms start time × 1000, so they never go backwards across restarts. |
 | EVT-003 | Replay ring buffer: last `C8_EVENTS_REPLAY` events (default 10 000). |
 | EVT-004 | Publishers: every service method that changes state (after its DB commit, in the same call that writes the audit event), the executor (deployment/rollout progress), the informer pipeline (08), the grant sweeper, and the target checker. Publishing never fails the caller. |
-| EVT-005 | High-frequency sources are coalesced: at most one `stack.updated` per stack and one `deployment.updated` per deployment per second (latest wins). |
+| EVT-005 | High-frequency sources are coalesced: at most one `stack.updated` per stack, one `deployment.updated` per deployment and (M19) one `discovery.updated` per workload per second (latest wins). |
 
 ## SSE endpoint
 
@@ -41,8 +41,11 @@ Evaluated per event per subscriber, against the principal's current roles (same 
 
 | Event scope | Delivered to |
 |---|---|
-| Namespaced (`stack.*`, `revision.*`, `deployment.*`) | Principals with ≥ `viewer` in that namespace |
-| `access_grant.updated` | The requester, members of the namespace's `approver_group` (`approver_for`), `global_admin` |
+| Namespaced (`stack.*`, `revision.*`, `deployment.*`) | Principals with ≥ `viewer` in that namespace, or (M17) on the stack's product |
+| `product.*`, `application.updated`, `environment.updated` (M17) | Principals who can see the product (product role, or a namespace role on any of its stacks) |
+| `migration.*` (M17b) | Plan creator, admins of the plan's product, `global_admin` |
+| `discovery.updated`, `discovery.finding` (M19/M20) | Viewers of the mapped namespace, product role holders of the attributed product, `global_admin`; unmapped/system: `global_admin` only (DSC-022/024) |
+| `access_grant.updated` | The requester, members of the grant's resolved approver group (product's, or namespace's for `unassigned`), product admins (M17), `global_admin` |
 | `audit.created` | Namespaced: ≥ `viewer` in that namespace. Global (null namespace): `global_admin` only |
 | `target.status` | Any principal with a role in any namespace (as `GET /targets`) |
 | `reset`, `session.ended` | That subscriber only |
@@ -60,6 +63,13 @@ Payload `data` is exactly the REST schema named (openapi `components/schemas`), 
 | `access_grant.updated` | `AccessGrant` | Request, approve, deny, revoke, activate, expire |
 | `audit.created` | `AuditEvent` | Every audit write |
 | `target.status` | `Target` | Reachability, informer sync state or server version change |
+| `product.updated` / `product.removed` | `Product` / `{slug}` | M17: product create/update/delete |
+| `application.updated` | `Asset` (application) | M17: create/update/reassign/delete (`deleted: true`) |
+| `environment.updated` | `Environment` | M17: create/update/delete |
+| `migration.plan.created` | `MigrationPlan` (summary) | M17b: plan stored |
+| `migration.applied` / `migration.undone` | `MigrationResult` | M17b: apply / undo |
+| `discovery.updated` | `DiscoveredWorkload` (`gone: true` on delete) | M19: read-model change, coalesced ≤ 1/s per workload |
+| `discovery.finding` | `Finding` | M20: opened, resolved, reopened, acknowledged, ack expired |
 | `reset` | `{reason}` | Resume impossible (EVT-011) |
 | `session.ended` | `{reason}` | EVT-014 |
 

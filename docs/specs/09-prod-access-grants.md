@@ -1,6 +1,6 @@
 # 09 Prod access grants
 
-Non-prod: a normal namespace role is enough to deploy. Prod: nobody deploys by default; a user needs a **temporary, time-boxed access grant** approved by **one member of the owning product's approver group** (`namespace.approver_group`, elevated approval, D-40).
+Non-prod: a normal namespace or product role is enough to deploy. Prod: nobody deploys by default; a user needs a **temporary, time-boxed access grant** approved by **one member of the owning product's approver group** (`namespace.approver_group`, elevated approval, D-40).
 
 ## Environment tiers
 
@@ -28,7 +28,8 @@ Not gated: reads, creating stacks/revisions (no cluster write), automatic rollba
 | GRT-011 | Missing/expired grant → 403 `grant_required` with `scope` in the problem body so the UI can offer "Request access". |
 | GRT-012 | The grant is checked again when the worker moves the deployment to `running` (D-44). Expired or revoked by then → deployment `failed`, `error=grant_expired`, nothing applied. A deployment waiting in `pending_approval` uses the **requester's** grant at run time. |
 | GRT-013 | Expiry or revoke **during** a running deployment does not interrupt it: the rollout completes, or rolls back per 08. No new apply starts on that grant. |
-| GRT-014 | Every gated action's audit event carries `details.grant_id` (or `details.grant_bypass="break_glass"`). |
+| GRT-014 | Every gated action's audit event carries `details.grant_id` (or `details.grant_bypass="break_glass"`) and, since M17, `details.product`. |
+| GRT-017 | Since M17 the prod gate matches the stack's (target, namespace, product); a grant for product A never covers product B in the same namespace. Prod-gated actions also include `adopt` and `release` deployments (M21) and migration plans that contain adoption items (MIG-005). Effective tier includes the environment tier (PRD-043): `staging` is prod by default. |
 | GRT-015 | API tokens act with their owner's grants (D-45). |
 | GRT-016 | Break-glass sessions skip the grant check (D-48); every such action is audited with `grant_bypass=break_glass` and the break-glass banner (AUTH-014) shows. |
 
@@ -38,7 +39,8 @@ Not gated: reads, creating stacks/revisions (no cluster write), automatic rollba
 |---|---|
 | `id` (`agr_`) | |
 | `requester_id` | user id |
-| `target_id`, `namespace_id` | Single scope. Target must exist; namespace must exist; at least one is prod |
+| `target_id`, `namespace_id` | Target must exist; namespace must exist; at least one is prod |
+| `product_id` | Since M17: third part of the single scope (target, namespace, product) = (product, environment). Legacy rows and requests without `product` = built-in `unassigned` (PRD-020/022) |
 | `reason` | required, 10..500 chars |
 | `ticket_ref` | optional change ticket ref (free text, ≤ 100) |
 | `duration_minutes` | 15 .. `C8_GRANT_MAX` (default 4h; env-configurable up to `C8_GRANT_MAX_CAP`, default 24h) |
@@ -63,8 +65,8 @@ requested --not decided in 24 h--> expired
 
 | ID | Rule |
 |---|---|
-| GRT-020 | Approver must be a member (groups at last login) of the grant namespace's **current** `approver_group` **and** must not be the requester. One approval is enough (two-approver is a future option). Break-glass and tokens cannot approve. |
-| GRT-027 | A grant request for a namespace without `approver_group` → 409 `approver_group_missing`. A namespace with tier `prod` must have `approver_group` (400 on create/update without it). Only `global_admin` sets it (D-50). |
+| GRT-020 | Approver must be a member (groups at last login) of the grant's **current resolved approver group** — `product.approver_group`, or for the built-in `unassigned` product the namespace's `approver_group` (M17, PRD-021) — **and** must not be the requester. One approval is enough (two-approver is a future option). Break-glass and tokens cannot approve. |
+| GRT-027 | A grant request whose resolved approver group is empty (an `unassigned` app in a namespace without `approver_group`) → 409 `approver_group_missing`. Real products always have one (PRD-001). A namespace with tier `prod` must have `approver_group` (400 on create/update without it). Only `global_admin` sets it (D-50). |
 | GRT-021 | A user may hold at most one `requested`/`approved`/`active` grant per scope (409 `grant_exists`). |
 | GRT-022 | The requester must hold at least `operator` in the namespace at request time (403 otherwise). |
 | GRT-023 | Status transitions on time are computed on read (`now` vs `starts_at`/`expires_at`) and persisted by a 1-minute sweeper that writes `access_grant.activate` / `access_grant.expire` audit events (`actor_type=system`). |

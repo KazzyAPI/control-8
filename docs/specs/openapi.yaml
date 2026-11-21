@@ -20,6 +20,10 @@ tags:
   - {name: policy}
   - {name: access}
   - {name: audit}
+  - {name: products, description: 'M17+ (12-products.md)'}
+  - {name: migrations, description: 'M17b (12-products.md)'}
+  - {name: discovery, description: 'M19+ (11-discovery.md)'}
+  - {name: findings, description: 'M20 (11-discovery.md)'}
   - {name: parachute, description: Docker track (later)}
 
 paths:
@@ -222,6 +226,177 @@ paths:
         - {$ref: '#/components/parameters/cursor'}
       responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AuditList'}}}}}
 
+  # ---- Products, environments, migrations (M17, M17b) ----
+  /products:
+    x-milestone: M17
+    get: {tags: [products], operationId: listProducts, parameters: [{name: tag, in: query, schema: {type: string}}, {$ref: '#/components/parameters/limit'}, {$ref: '#/components/parameters/cursor'}], responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProductList'}}}}}}
+    post: {tags: [products], operationId: createProduct, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProductCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}:
+    x-milestone: M17
+    parameters: [{$ref: '#/components/parameters/product'}]
+    get: {tags: [products], operationId: getProduct, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}}}}
+    patch: {tags: [products], operationId: updateProduct, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProductUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}}, '403': {$ref: '#/components/responses/Problem'}}}
+    delete: {tags: [products], operationId: deleteProduct, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/applications:
+    x-milestone: M17
+    parameters: [{$ref: '#/components/parameters/product'}]
+    get: {tags: [products], operationId: listApplications, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AssetList'}}}}}}
+    post: {tags: [products], operationId: createApplication, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/applications/{app}:
+    x-milestone: M17
+    parameters: [{$ref: '#/components/parameters/product'}, {name: app, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
+    get: {tags: [products], operationId: getApplication, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
+    patch: {tags: [products], operationId: updateApplication, description: 'product field = reassign (global_admin, PRD-004)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
+    delete: {tags: [products], operationId: deleteApplication, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/applications/{app}/stacks:
+    x-milestone: M17
+    parameters: [{$ref: '#/components/parameters/product'}, {name: app, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
+    post:
+      tags: [products]
+      operationId: placeApplication
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [environment], additionalProperties: false, properties: {environment: {$ref: '#/components/schemas/Slug'}, slug: {$ref: '#/components/schemas/Slug'}}}}}}
+      responses: {'201': {description: Draft stack, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
+  /products/{product}/environments:
+    x-milestone: M17
+    parameters: [{$ref: '#/components/parameters/product'}]
+    get: {tags: [products], operationId: listEnvironments, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Environment'}}}}}}}}}
+    post: {tags: [products], operationId: createEnvironment, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/environments/{env}:
+    x-milestone: M17
+    parameters: [{$ref: '#/components/parameters/product'}, {name: env, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
+    get: {tags: [products], operationId: getEnvironment, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}}}
+    patch: {tags: [products], operationId: updateEnvironment, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
+    delete: {tags: [products], operationId: deleteEnvironment, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/overview:
+    x-milestone: M17
+    parameters: [{$ref: '#/components/parameters/product'}]
+    get: {tags: [products], operationId: getProductOverview, responses: {'200': {description: Matrix, content: {application/json: {schema: {$ref: '#/components/schemas/ProductOverview'}}}}}}
+  /migrations/dry-run:
+    x-milestone: M17b
+    post: {tags: [migrations], operationId: dryRunMigration, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationInput'}}}}, responses: {'200': {description: Plan (not stored), content: {application/json: {schema: {$ref: '#/components/schemas/MigrationPlan'}}}}, '400': {$ref: '#/components/responses/Problem'}, '403': {$ref: '#/components/responses/Problem'}}}
+  /migrations/plans:
+    x-milestone: M17b
+    post: {tags: [migrations], operationId: createMigrationPlan, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationInput'}}}}, responses: {'201': {description: Stored plan, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationPlan'}}}}, '400': {$ref: '#/components/responses/Problem'}, '403': {$ref: '#/components/responses/Problem'}}}
+  /migrations/plans/{id}:
+    x-milestone: M17b
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [migrations], operationId: getMigrationPlan, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationPlan'}}}}}}
+  /migrations/plans/{id}/apply:
+    x-milestone: M17b
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post:
+      tags: [migrations]
+      operationId: applyMigrationPlan
+      requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {confirm_prod: {type: string, description: 'Product slug; required when the plan creates or raises prod tier'}}}}}}
+      responses: {'200': {description: Applied, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationResult'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
+  /migrations/{id}/undo:
+    x-milestone: M17b
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [migrations], operationId: undoMigration, responses: {'200': {description: Undone, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationResult'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
+
+  # ---- Discovery, findings, adoption (M19-M21) ----
+  /targets/{target}/discovery:
+    x-milestone: M19
+    parameters: [{name: target, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
+    get: {tags: [discovery], operationId: getTargetDiscovery, responses: {'200': {description: Status, content: {application/json: {schema: {$ref: '#/components/schemas/DiscoveryStatus'}}}}}}
+  /targets/{target}/discovery/namespaces:
+    x-milestone: M19
+    parameters: [{name: target, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
+    get: {tags: [discovery], operationId: listDiscoveredNamespaces, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/DiscoveredNamespace'}}}}}}}}}
+  /targets/{target}/namespace-mappings/{k8s_ns}:
+    x-milestone: M19
+    parameters: [{name: target, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}, {name: k8s_ns, in: path, required: true, schema: {type: string}}]
+    put:
+      tags: [discovery]
+      operationId: setNamespaceMapping
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [namespace], additionalProperties: false, properties: {namespace: {$ref: '#/components/schemas/Slug'}}}}}}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DiscoveredNamespace'}}}}}
+    delete: {tags: [discovery], operationId: deleteNamespaceMapping, responses: {'204': {description: Deleted}}}
+  /discovery/workloads:
+    x-milestone: M19
+    get:
+      tags: [discovery]
+      operationId: listDiscoveredWorkloads
+      parameters:
+        - {name: target, in: query, schema: {type: string}}
+        - {name: namespace, in: query, schema: {type: string}}
+        - {name: k8s_namespace, in: query, schema: {type: string}}
+        - {name: class, in: query, schema: {$ref: '#/components/schemas/DiscoveryClass'}}
+        - {name: tier, in: query, schema: {$ref: '#/components/schemas/EnvironmentTier'}}
+        - {name: product, in: query, schema: {type: string}}
+        - {name: kind, in: query, schema: {type: string}}
+        - {name: q, in: query, schema: {type: string}}
+        - {name: include_gone, in: query, schema: {type: boolean}}
+        - {$ref: '#/components/parameters/limit'}
+        - {$ref: '#/components/parameters/cursor'}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DiscoveredWorkloadList'}}}}}
+  /discovery/workloads/{id}:
+    x-milestone: M19
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [discovery], operationId: getDiscoveredWorkload, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DiscoveredWorkload'}}}}}}
+  /discovery/workloads/assign:
+    x-milestone: M19
+    post:
+      tags: [discovery]
+      operationId: assignDiscoveredWorkloads
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [workloads, product], additionalProperties: false, properties: {workloads: {type: array, items: {type: string}, maxItems: 500}, product: {$ref: '#/components/schemas/Slug'}}}}}}
+      responses: {'200': {description: Assigned, content: {application/json: {schema: {$ref: '#/components/schemas/DiscoveredWorkloadList'}}}}, '403': {$ref: '#/components/responses/Problem'}}
+  /findings:
+    x-milestone: M20
+    get:
+      tags: [findings]
+      operationId: listFindings
+      parameters:
+        - {name: target, in: query, schema: {type: string}}
+        - {name: namespace, in: query, schema: {type: string}}
+        - {name: product, in: query, schema: {type: string}}
+        - {name: type, in: query, schema: {$ref: '#/components/schemas/FindingType'}}
+        - {name: severity, in: query, schema: {type: string, enum: [high, medium, low, info]}}
+        - {name: state, in: query, schema: {type: string, enum: [open, resolved]}}
+        - {name: acknowledged, in: query, schema: {type: boolean}}
+        - {$ref: '#/components/parameters/limit'}
+        - {$ref: '#/components/parameters/cursor'}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/FindingList'}}}}}
+  /findings/{id}:
+    x-milestone: M20
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [findings], operationId: getFinding, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Finding'}}}}}}
+  /findings/{id}/acknowledge:
+    x-milestone: M20
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post:
+      tags: [findings]
+      operationId: acknowledgeFinding
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], additionalProperties: false, properties: {reason: {type: string, minLength: 10, maxLength: 500}, expires_at: {type: string, format: date-time, description: 'At most 90 days ahead'}}}}}}
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Finding'}}}}, '403': {$ref: '#/components/responses/Problem'}}
+  /findings/{id}/unacknowledge:
+    x-milestone: M20
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [findings], operationId: unacknowledgeFinding, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Finding'}}}}}}
+  /discovery/adoptions:
+    x-milestone: M21
+    post: {tags: [discovery], operationId: planAdoption, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AdoptionCreate'}}}}, responses: {'201': {description: Plan, content: {application/json: {schema: {$ref: '#/components/schemas/Adoption'}}}}, '409': {$ref: '#/components/responses/Problem'}, '422': {$ref: '#/components/responses/Problem'}}}
+  /discovery/adoptions/{id}:
+    x-milestone: M21
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [discovery], operationId: getAdoption, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Adoption'}}}}}}
+  /discovery/adoptions/{id}/execute:
+    x-milestone: M21
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post:
+      tags: [discovery]
+      operationId: executeAdoption
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [confirm_environment_tier, reason], additionalProperties: false, properties: {confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}, reason: {type: string, minLength: 1}}}}}}
+      responses: {'202': {description: Adopt deployment, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
+  /namespaces/{ns}/stacks/{stack}/release:
+    x-milestone: M21
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    post:
+      tags: [stacks]
+      operationId: releaseStack
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason, confirm_environment_tier], additionalProperties: false, properties: {reason: {type: string, minLength: 1}, confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}}}}}}
+      responses: {'202': {description: Release deployment, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}, '403': {$ref: '#/components/responses/Problem'}}
+
   # ---- Docker track (later, 04) ----
   /namespaces/{ns}/stacks/{stack}/parachute:
     x-milestone: docker
@@ -264,6 +439,7 @@ components:
     id: {name: id, in: path, required: true, schema: {type: string}}
     limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
     cursor: {name: cursor, in: query, schema: {type: string}}
+    product: {name: product, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}
   responses:
     Problem:
       description: Error
@@ -295,7 +471,8 @@ components:
         auth_method: {type: string, enum: [oidc, break_glass, token]}
         global_admin: {type: boolean}
         csrf_token: {type: [string, 'null'], description: 'Cookie sessions only; send as X-CSRF-Token on mutations'}
-        approver_for: {type: array, items: {type: string}, description: 'Namespace slugs whose approver_group the user is in'}
+        approver_for: {type: array, items: {type: string}, description: 'Namespace slugs whose approver_group the user is in (fallback for unassigned apps since M17)'}
+        approver_for_products: {type: array, items: {type: string}, description: 'M17: product slugs whose approver_group the user is in'}
         namespaces: {type: array, items: {type: object, properties: {slug: {type: string}, role: {$ref: '#/components/schemas/Role'}}}}
         active_grants: {type: array, items: {$ref: '#/components/schemas/AccessGrant'}}
     Target:
@@ -313,6 +490,7 @@ components:
         server_version: {type: [string, 'null']}
         reachable: {type: boolean}
         sync: {type: string, enum: [syncing, watching, polling, down]}
+        discovery: {oneOf: [{$ref: '#/components/schemas/DiscoveryStatus'}, {type: 'null'}], description: M19}
         last_error: {type: [string, 'null']}
         last_seen_at: {type: [string, 'null'], format: date-time}
         parachute: {type: [object, 'null'], description: 'docker track only', properties: {configured: {type: boolean}, reachable: {type: boolean}, armed: {type: [boolean, 'null']}, polled_at: {type: [string, 'null']}}}
@@ -331,10 +509,12 @@ components:
         description: {type: [string, 'null']}
         owner: {type: [string, 'null']}
         image_repo: {type: [string, 'null']}
-        managed_by: {type: string, enum: [control8, argo]}
+        managed_by: {type: string, enum: [control8, argo, flux, helm, operator, external], description: 'flux/helm/operator/external from M17 (register-only)'}
         external_url: {type: [string, 'null']}
-    AssetCreate: {type: object, required: [slug, name], additionalProperties: false, properties: {slug: {$ref: '#/components/schemas/Slug'}, name: {type: string}, description: {type: string}, owner: {type: string}, image_repo: {type: string}, managed_by: {type: string, enum: [control8, argo], default: control8}, external_url: {type: string, format: uri}}}
-    AssetUpdate: {type: object, additionalProperties: false, properties: {name: {type: string}, description: {type: string}, owner: {type: string}, image_repo: {type: string}, external_url: {type: string, format: uri}}}
+        product: {type: string, description: M17}
+        external_ref: {type: [string, 'null'], description: 'M17: tool reference (DSC-051)'}
+    AssetCreate: {type: object, required: [slug, name], additionalProperties: false, properties: {slug: {$ref: '#/components/schemas/Slug'}, name: {type: string}, description: {type: string}, owner: {type: string}, image_repo: {type: string}, managed_by: {type: string, enum: [control8, argo, flux, helm, operator, external], default: control8}, external_url: {type: string, format: uri}, product: {type: string, description: 'M17; default unassigned on the legacy namespaced route'}, external_ref: {type: string}}}
+    AssetUpdate: {type: object, additionalProperties: false, properties: {name: {type: string}, description: {type: string}, owner: {type: string}, image_repo: {type: string}, external_url: {type: string, format: uri}, external_ref: {type: string}, product: {type: string, description: 'M17: reassign, global_admin only'}}}
     AssetList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Asset'}}, next_cursor: {type: [string, 'null']}}}
     StackCreate: {type: object, required: [slug, asset, target], additionalProperties: false, properties: {slug: {$ref: '#/components/schemas/Slug'}, asset: {$ref: '#/components/schemas/Slug'}, target: {$ref: '#/components/schemas/Slug'}, runtime: {$ref: '#/components/schemas/Runtime', description: 'Defaults to target kind; mismatch = 400'}}}
     Stack:
@@ -343,6 +523,9 @@ components:
       properties:
         id: {type: string}
         namespace: {type: string}
+        product: {type: [string, 'null'], description: M17}
+        application: {type: [string, 'null'], description: 'M17; = asset'}
+        environment: {type: [string, 'null'], description: 'M17; null for legacy stacks'}
         slug: {type: string}
         asset: {type: string}
         target: {type: string}
@@ -417,7 +600,7 @@ components:
         number: {type: integer}
         runtime: {$ref: '#/components/schemas/Runtime'}
         safety_profile: {$ref: '#/components/schemas/SafetyProfile'}
-        origin: {type: string, enum: [user, image_update]}
+        origin: {type: string, enum: [user, image_update, adoption], description: 'adoption from M21'}
         base_revision: {type: [integer, 'null']}
         manifests_input: {type: [string, 'null']}
         compose_input: {type: [string, 'null']}
@@ -466,7 +649,9 @@ components:
         id: {type: string}
         namespace: {type: string}
         stack: {type: string}
-        action: {type: string, enum: [apply, teardown]}
+        action: {type: string, enum: [apply, teardown, adopt, release], description: 'adopt/release from M21'}
+        product: {type: [string, 'null'], description: M17}
+        environment: {type: [string, 'null'], description: M17}
         trigger: {type: string, enum: [manual, image_update, digest_poll]}
         revision: {type: [integer, 'null']}
         runtime: {$ref: '#/components/schemas/Runtime'}
@@ -491,6 +676,7 @@ components:
       properties:
         target: {$ref: '#/components/schemas/Slug'}
         namespace: {$ref: '#/components/schemas/Slug'}
+        product: {$ref: '#/components/schemas/Slug', description: 'M17; default unassigned (PRD-022)'}
         reason: {type: string, minLength: 10, maxLength: 500}
         ticket_ref: {type: string, maxLength: 100}
         duration_minutes: {type: integer, minimum: 15, maximum: 1440, description: 'Capped by C8_GRANT_MAX'}
@@ -498,6 +684,8 @@ components:
     AccessGrant:
       type: object
       properties:
+        product: {type: string, description: 'M17; legacy grants = unassigned'}
+        environment: {type: [string, 'null'], description: M17}
         id: {type: string}
         requester: {type: string}
         target: {type: string}
@@ -530,8 +718,9 @@ components:
         allowed_safety_profiles: {type: array, items: {$ref: '#/components/schemas/SafetyProfile'}}
         allowed_bind_prefixes: {type: array, items: {type: string}, description: 'Allowed hostPath / bind prefixes; empty = none'}
         allow_privileged: {type: boolean}
-    RoleBinding: {type: object, properties: {id: {type: string}, idp_group: {type: string}, namespace: {type: [string, 'null']}, role: {$ref: '#/components/schemas/Role'}}}
-    RoleBindingCreate: {type: object, required: [idp_group, role], additionalProperties: false, properties: {idp_group: {type: string}, namespace: {type: [string, 'null']}, role: {$ref: '#/components/schemas/Role'}}}
+        allowed_products: {type: array, items: {type: string}, description: 'M17: products allowed to place apps in this namespace; empty = any'}
+    RoleBinding: {type: object, properties: {id: {type: string}, idp_group: {type: string}, namespace: {type: [string, 'null']}, product: {type: [string, 'null'], description: 'M17; at most one of namespace/product'}, role: {$ref: '#/components/schemas/Role'}}}
+    RoleBindingCreate: {type: object, required: [idp_group, role], additionalProperties: false, properties: {idp_group: {type: string}, namespace: {type: [string, 'null']}, product: {type: [string, 'null'], description: M17}, role: {$ref: '#/components/schemas/Role'}}}
     Token: {type: object, description: 'From C8_TOKENS; hash never returned', properties: {id: {type: string}, name: {type: string}, owner_sub: {type: string}, owner_resolved: {type: boolean}, namespace: {type: [string, 'null']}, role: {$ref: '#/components/schemas/Role'}, expires_at: {type: string}, last_used_at: {type: [string, 'null']}, revoked_at: {type: [string, 'null']}}}
     AuditEvent:
       type: object
@@ -549,7 +738,7 @@ components:
         outcome: {type: string, enum: [success, denied, failed]}
         details: {type: object, description: 'Prod-gated actions include grant_id or grant_bypass'}
         request_id: {type: [string, 'null']}
-    EventType: {type: string, enum: [stack.updated, stack.removed, revision.created, deployment.updated, access_grant.updated, audit.created, target.status, reset, session.ended]}
+    EventType: {type: string, enum: [stack.updated, stack.removed, revision.created, deployment.updated, access_grant.updated, audit.created, target.status, reset, session.ended, product.updated, product.removed, application.updated, environment.updated, migration.plan.created, migration.applied, migration.undone, discovery.updated, discovery.finding], description: 'product.* .. migration.* from M17/M17b; discovery.* from M19/M20'}
     Event:
       type: object
       required: [type, at, data]
@@ -566,6 +755,168 @@ components:
             - {$ref: '#/components/schemas/AccessGrant'}
             - {$ref: '#/components/schemas/AuditEvent'}
             - {$ref: '#/components/schemas/Target'}
+            - {$ref: '#/components/schemas/Product'}
+            - {$ref: '#/components/schemas/Asset'}
+            - {$ref: '#/components/schemas/Environment'}
+            - {$ref: '#/components/schemas/MigrationPlan'}
+            - {$ref: '#/components/schemas/MigrationResult'}
+            - {$ref: '#/components/schemas/DiscoveredWorkload'}
+            - {$ref: '#/components/schemas/Finding'}
             - {type: object, description: 'stack.removed', required: [namespace, slug], properties: {namespace: {type: string}, slug: {type: string}}}
             - {type: object, description: 'reset / session.ended', required: [reason], properties: {reason: {type: string}}}
+    Product:
+      type: object
+      properties:
+        id: {type: string}
+        slug: {$ref: '#/components/schemas/Slug'}
+        name: {type: string}
+        description: {type: [string, 'null']}
+        owner: {type: [string, 'null']}
+        links: {type: array, items: {type: object, properties: {label: {type: string}, url: {type: string, format: uri}}}}
+        approver_group: {type: [string, 'null'], description: 'null only for built-in unassigned'}
+        tags: {type: array, items: {type: string}}
+        builtin: {type: boolean}
+        counts: {type: object, properties: {applications: {type: integer}, stacks: {type: integer}, prod: {type: integer}, non_prod: {type: integer}, unhealthy: {type: integer}, open_findings: {type: integer}, active_grants: {type: integer}}}
+    ProductCreate: {type: object, required: [slug, name, approver_group], additionalProperties: false, properties: {slug: {$ref: '#/components/schemas/Slug'}, name: {type: string}, description: {type: string}, owner: {type: string}, links: {type: array, items: {type: object, properties: {label: {type: string}, url: {type: string, format: uri}}}}, approver_group: {type: string}, tags: {type: array, items: {type: string}, maxItems: 20}}}
+    ProductUpdate: {type: object, additionalProperties: false, properties: {name: {type: string}, description: {type: string}, owner: {type: string}, links: {type: array, items: {type: object, properties: {label: {type: string}, url: {type: string, format: uri}}}}, approver_group: {type: string, description: global_admin only}, tags: {type: array, items: {type: string}, maxItems: 20}}}
+    ProductList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Product'}}, next_cursor: {type: [string, 'null']}}}
+    Environment: {type: object, properties: {id: {type: string}, product: {type: string}, name: {$ref: '#/components/schemas/Slug'}, tier: {$ref: '#/components/schemas/EnvironmentTier'}, target: {type: string}, namespace: {type: string}, order: {type: integer}, effective_tier: {$ref: '#/components/schemas/EnvironmentTier'}}}
+    EnvironmentCreate: {type: object, required: [name, tier, target, namespace], additionalProperties: false, properties: {name: {$ref: '#/components/schemas/Slug'}, tier: {$ref: '#/components/schemas/EnvironmentTier'}, target: {$ref: '#/components/schemas/Slug'}, namespace: {$ref: '#/components/schemas/Slug'}, order: {type: integer}, confirm_prod: {type: string, description: 'Product slug; required when tier=prod'}}}
+    EnvironmentUpdate: {type: object, additionalProperties: false, properties: {tier: {$ref: '#/components/schemas/EnvironmentTier'}, target: {$ref: '#/components/schemas/Slug'}, namespace: {$ref: '#/components/schemas/Slug'}, order: {type: integer}, confirm_prod: {type: string}}}
+    ProductOverview:
+      type: object
+      properties:
+        product: {$ref: '#/components/schemas/Product'}
+        environments: {type: array, items: {type: object, properties: {name: {type: [string, 'null'], description: 'null = legacy column'}, tier: {$ref: '#/components/schemas/EnvironmentTier'}, target: {type: string}, namespace: {type: string}, order: {type: integer}}}}
+        applications:
+          type: array
+          items:
+            type: object
+            properties:
+              slug: {type: string}
+              name: {type: string}
+              managed_by: {type: string}
+              cells:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    environment: {type: [string, 'null']}
+                    target: {type: string}
+                    namespace: {type: string}
+                    stack: {type: string}
+                    state: {type: string}
+                    safety_profile: {oneOf: [{$ref: '#/components/schemas/SafetyProfile'}, {type: 'null'}]}
+                    desired_revision: {type: [integer, 'null']}
+                    images: {type: array, items: {type: object, properties: {container: {type: string}, image: {type: string}, digest: {type: [string, 'null']}}}}
+                    health: {type: string}
+                    drift_count: {type: integer}
+                    rollout: {type: [object, 'null'], properties: {state: {type: string}, result: {type: [string, 'null']}}}
+                    pending_grants: {type: integer}
+                    open_findings: {type: integer}
+        totals: {type: object, additionalProperties: {type: integer}}
+    MigrationInput:
+      type: object
+      required: [product, environments, assignments]
+      additionalProperties: false
+      properties:
+        product: {description: 'Existing slug, or a new product', oneOf: [{$ref: '#/components/schemas/Slug'}, {$ref: '#/components/schemas/ProductCreate'}]}
+        team_binding: {type: object, properties: {idp_group: {type: string}, role: {$ref: '#/components/schemas/Role'}}}
+        environments: {type: array, items: {$ref: '#/components/schemas/EnvironmentCreate'}}
+        assignments: {type: array, items: {type: object, required: [kind, id], properties: {kind: {type: string, enum: [application, stack, discovered_workload]}, id: {type: string}, environment: {type: [string, 'null']}, application: {type: [string, 'null']}}}}
+        adopt: {type: array, description: M21, items: {type: object, properties: {workloads: {type: array, items: {type: string}}, application: {type: string}, environment: {type: string}}}}
+    MigrationPlan:
+      type: object
+      properties:
+        id: {type: [string, 'null'], description: 'null for dry-run'}
+        version: {type: integer}
+        status: {type: string, enum: [planned, applied, undone, expired]}
+        product: {type: string}
+        changes: {type: array, items: {type: object, properties: {entity: {type: string}, id: {type: [string, 'null']}, action: {type: string, enum: [create, update, move, bind]}, before: {}, after: {}}}}
+        approver_resolution: {type: array, items: {type: object, properties: {stack: {type: string}, before: {type: [string, 'null']}, after: {type: [string, 'null']}}}}
+        tier_changes: {type: array, items: {type: object, properties: {stack: {type: string}, before: {$ref: '#/components/schemas/EnvironmentTier'}, after: {$ref: '#/components/schemas/EnvironmentTier'}}}}
+        grant_implications: {type: array, items: {type: object, properties: {grant: {type: string}, effect: {type: string}}}}
+        findings: {type: array, items: {type: object, properties: {severity: {type: string}, text: {type: string}}}}
+        callouts: {type: array, items: {type: object, properties: {severity: {type: string, enum: [info, warning, danger]}, effect: {type: string, enum: [harder, easier, neutral]}, text: {type: string}}}}
+        warnings: {type: array, items: {type: string}}
+        errors: {type: array, items: {type: string}}
+        requires_confirm_prod: {type: boolean}
+        created_by: {type: string}
+        expires_at: {type: [string, 'null'], format: date-time}
+    MigrationResult: {type: object, properties: {id: {type: string}, status: {type: string, enum: [applied, undone]}, applied_at: {type: string, format: date-time}, undo_until: {type: [string, 'null'], format: date-time}, changed: {type: integer}, adoption_deployments: {type: array, items: {type: string}}}}
+    DiscoveryClass: {type: string, enum: [managed, argo, flux, helm, operator, system, ungoverned]}
+    DiscoveryStatus: {type: object, properties: {state: {type: string, enum: ['off', syncing, 'on', unavailable]}, reason: {type: [string, 'null']}, truncated: {type: boolean}, seen: {type: integer}, recorded: {type: integer}, excluded: {type: integer}, by_class: {type: object, additionalProperties: {type: integer}}}}
+    DiscoveredNamespace: {type: object, properties: {k8s_namespace: {type: string}, namespace: {type: [string, 'null'], description: 'Mapped Control 8 namespace'}, mapping: {type: string, enum: [explicit, implicit, none]}, tier: {$ref: '#/components/schemas/EnvironmentTier'}, system: {type: boolean}, by_class: {type: object, additionalProperties: {type: integer}}}}
+    DiscoveredWorkload:
+      type: object
+      properties:
+        id: {type: string}
+        target: {type: string}
+        k8s_namespace: {type: string}
+        kind: {type: string}
+        name: {type: string}
+        class: {$ref: '#/components/schemas/DiscoveryClass'}
+        tool_ref: {type: [string, 'null']}
+        namespace: {type: [string, 'null']}
+        product: {type: [string, 'null']}
+        application: {type: [string, 'null']}
+        tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        images: {type: array, items: {type: object, properties: {container: {type: string}, image: {type: string}}}}
+        desired_replicas: {type: integer}
+        ready_replicas: {type: integer}
+        open_findings: {type: integer}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        last_changed: {type: string, format: date-time}
+        gone: {type: boolean}
+    DiscoveredWorkloadList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/DiscoveredWorkload'}}, next_cursor: {type: [string, 'null']}}}
+    FindingType: {type: string, enum: [ungoverned_in_prod, ungoverned_non_prod, image_registry_not_allowed, privileged_workload, host_path_mount, argo_unlinked]}
+    Finding:
+      type: object
+      properties:
+        id: {type: string}
+        type: {$ref: '#/components/schemas/FindingType'}
+        severity: {type: string, enum: [high, medium, low, info]}
+        state: {type: string, enum: [open, resolved]}
+        workload: {$ref: '#/components/schemas/DiscoveredWorkload'}
+        product: {type: [string, 'null']}
+        namespace: {type: [string, 'null']}
+        tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        details: {type: object}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        resolved_at: {type: [string, 'null'], format: date-time}
+        reopened_count: {type: integer}
+        acknowledgement: {type: [object, 'null'], properties: {by: {type: string}, reason: {type: string}, at: {type: string, format: date-time}, expires_at: {type: [string, 'null'], format: date-time}}}
+    FindingList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Finding'}}, next_cursor: {type: [string, 'null']}}}
+    AdoptionCreate:
+      type: object
+      required: [target, k8s_namespace, workloads, product, application, stack]
+      additionalProperties: false
+      properties:
+        target: {$ref: '#/components/schemas/Slug'}
+        k8s_namespace: {type: string}
+        workloads: {type: array, items: {type: string}, minItems: 1, description: 'DiscoveredWorkload ids'}
+        companions: {type: array, items: {type: object, required: [kind, name], properties: {kind: {type: string}, name: {type: string}}}}
+        product: {$ref: '#/components/schemas/Slug'}
+        application: {description: 'Existing slug or new', oneOf: [{$ref: '#/components/schemas/Slug'}, {type: object, required: [slug, name], properties: {slug: {$ref: '#/components/schemas/Slug'}, name: {type: string}}}]}
+        environment: {$ref: '#/components/schemas/Slug'}
+        stack: {$ref: '#/components/schemas/Slug'}
+        safety_profile: {$ref: '#/components/schemas/SafetyProfile', default: as_is}
+    Adoption:
+      type: object
+      properties:
+        id: {type: string}
+        status: {type: string, enum: [planned, executing, executed, failed, expired]}
+        product: {type: string}
+        application: {type: string}
+        stack: {type: string}
+        manifests: {type: string, description: 'Sanitised revision-1 YAML'}
+        diff: {type: string, description: 'Unified diff live vs after (metadata labels only)'}
+        policy_result: {$ref: '#/components/schemas/PolicyResult'}
+        warnings: {type: array, items: {type: string}}
+        requires_grant: {type: boolean}
+        environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
+        deployment: {type: [string, 'null']}
+        expires_at: {type: string, format: date-time}
     AuditList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/AuditEvent'}}, next_cursor: {type: [string, 'null']}}}

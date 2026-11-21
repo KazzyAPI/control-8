@@ -16,8 +16,10 @@ Source of intent: [../vision.md](../vision.md). These specs are the build contra
 | [08-kubernetes-runtime.md](08-kubernetes-runtime.md) | Targets, manifests, server-side apply, ownership, managed rollout, health, drift |
 | [09-prod-access-grants.md](09-prod-access-grants.md) | Environment tiers, time-boxed prod access grants, elevated approval, enforcement boundary, webhook |
 | [10-events.md](10-events.md) | Event bus, SSE endpoint, resume/replay, per-viewer filtering, event catalogue |
+| [11-discovery.md](11-discovery.md) | **M19–M21.** Cluster-wide read-only discovery, classification, namespace mapping, findings, adoption, register-only |
+| [12-products.md](12-products.md) | **M17–M18b.** Products, applications, environments (dev/uat/staging/prod), product role bindings, approver/grant rework, product matrix, migration assistant |
 
-Requirement IDs (`ARC-`, `DOM-`, `API-`, `PCH-`, `AUTH-`, `POL-`, `UI-`, `K8S-`, `GRT-`, `EVT-`) are stable; tests cite them in their names or comments.
+Requirement IDs (`ARC-`, `DOM-`, `API-`, `PCH-`, `AUTH-`, `POL-`, `UI-`, `K8S-`, `GRT-`, `EVT-`, `PRD-`, `MIG-`, `DSC-`) are stable; tests cite them in their names or comments.
 
 ## Glossary
 
@@ -26,8 +28,11 @@ Requirement IDs (`ARC-`, `DOM-`, `API-`, `PCH-`, `AUTH-`, `POL-`, `UI-`, `K8S-`,
 | **Target** | Where Control 8 deploys. v1: Kubernetes clusters defined in config (`C8_TARGETS`; kubeconfig from a Secret-injected env var or file, or in-cluster service account). Later: Docker host `local` (`kind=docker`). |
 | **Runtime** | Per stack: `kubernetes` (raw manifests, 08) or `docker` (compose, 04, later). Equals the target's kind. |
 | **Environment tier** | `prod` or `non-prod` on every namespace and target. A stack is prod if its namespace **or** its target is prod (09). |
+| **Product** | (M17) The unit teams think in: many applications, its own environments and approver group (12). |
+| **Environment** | (M17) Product-scoped name (dev, uat, staging, prod) with a tier, pointing at one (target, namespace). `staging` and `prod` are prod tier by default. |
+| **Discovered workload** | (M19) Any workload found in a cluster, classified `managed`, `argo`, `flux`, `helm`, `operator`, `system` or `ungoverned` (11). |
 | **Namespace** | Unit of ownership and permission (team/project). Maps 1:1 to a Kubernetes namespace on Kubernetes targets. |
-| **Asset** | A registered application: name, image repository, owner, who manages it (`control8` or `argo`). Metadata only; never a blob. |
+| **Asset** | ("Application" in API/UI since M17) A registered application of a **product**: name, image repository, owner, who manages it (`control8` or `argo`). Metadata only; never a blob. |
 | **Stack** | One deployable unit of an asset on a target: a set of manifests (Kubernetes) or a compose project (Docker). |
 | **Revision** | Immutable, numbered version of a stack's desired state (manifests or compose, env, secret refs, safety profile). |
 | **Deployment** | One attempt to apply a revision to a target (or tear the stack down). Has an approval, run status and, on Kubernetes, rollout status. |
@@ -181,4 +186,24 @@ Later, optional (after v1, roadmap "Docker track"): Docker runtime driver (compo
 | D-101 | M16 image CI: distroless has no `id`, so the uid check reads `docker inspect` `Config.User` plus the running process's host uid (10001). Dockerfile base images (`node:22-alpine`, `golang:1.24`) are pinned by the multi-arch index digest looked up from Docker Hub on 2026-11-21; `.dockerignore` added so host `node_modules`/`bin`/`tmp` never enter the build. Release image push is `.github/workflows/release.yaml` on `v*` tags only | D-92 asked to pin before M16 |
 | D-102 | UI restyle: `tailwindcss` v4 + `@tailwindcss/vite` and `daisyui` v5 (dev dependencies, compiled to one CSS file at build time; no CDN, no runtime style injection). Themes: daisyUI `light` (default) and `dark` (`prefers-color-scheme`), with light-theme error/success/info darkened so coloured text passes axe. No CSP change: the CSS is a same-origin file and nothing sets inline styles, so `default-src 'self'` still covers it. Badges, health and status always carry text (UI-032) | Component styling requested; smallest set that gives themed components |
 | D-103 | `/login` is now an SPA route (`screens/Login.tsx`) and the Go `GET /login` page is removed so the history fallback serves it; the form still posts natively and form-encoded to `/auth/break-glass` (server redirects to `/`) and the OIDC link is `/auth/login`. `/no-access` stays the Go page. Unauthenticated `/me` 401 still does a full-page nav to `/login` (UI-002) | One page, same CSS; amends D-65/D-90 |
-
+| D-104 | Discovery (M19) uses a **separate**, read-only, unfiltered dynamic informer factory per target (`discovery: on` by default); the v1 managed-object informers are untouched; Secrets/ConfigMaps are never watched | Isolates the new feature from built deploy paths; least data |
+| D-105 | Memory bounds: informer `TransformFunc` strips objects to the fields discovery needs (no `managedFields`, no full specs); read model capped by `C8_DISCOVERY_MAX` with a visible `truncated` flag | Big clusters must not blow memory or the DB |
+| D-106 | Classification precedence managed > argo > flux > helm > operator > system > ungoverned; pure function; operator-owned objects attributed to their root owner (one hop, no CR fetch) | Owner order; no extra RBAC for custom resources |
+| D-107 | Kubernetes namespace → Control 8 namespace: explicit `namespace_mapping` row, else implicit slug match, else unmapped (target tier, visible to `global_admin` only) | Reuses K8S-010; explicit escape hatch for legacy names |
+| D-108 | Findings are report-only; blocking needs an in-cluster admission policy, documented (`docs/ops/admission.md`, VAP + Kyverno) but not built or checked | Control 8 cannot stop kubectl; say so plainly |
+| D-109 | Finding acknowledgements: reason required, optional expiry ≤ 90 d, by namespace admin / product admin / global_admin; only new or reopened unacknowledged **high** findings go to the webhook (reusing GRT-040/041) | Low noise; one webhook mechanism |
+| D-110 | Adoption writes **object metadata labels only**, never pod-template labels; revision 1 has `template_labels=false`; a dry-run must keep `metadata.generation` unchanged | Guarantees no rollout on adoption; the first real deploy adds template labels (warned) |
+| D-111 | Adoption migrates field ownership from a fixed allow-list of manual kubectl managers to `control-8` with client-go `csaupgrade`; any other spec manager → refuse, never force | Without it every adopted object's first deploy would hit `ownership_conflict`; controllers/operators are never taken over |
+| D-112 | Adoption default safety profile `as_is`; plans expire after 30 min and are pinned to object uids | Adoption changes nothing at runtime; stale plans must not label replaced objects |
+| D-113 | New deployment action `release` removes Control 8 labels and leaves objects running (undo of adoption, usable on any stack) | Teardown deletes objects; release is the safe "stop managing" |
+| D-114 | Adoption requires the Kubernetes namespace to equal the Control 8 namespace slug (K8S-010); explicitly mapped differently-named namespaces are discoverable but not adoptable in v1 | Keeps one namespace rule for managed stacks |
+| D-115 | Register-only applications use `managed_by` ∈ argo/flux/helm/operator/external + `external_ref`; tool-managed workloads are never adopted | One writer per workload |
+| D-116 | `deploy/kubernetes/rbac-discovery.yaml`: separate ClusterRole, get/list/watch on exactly the discovered kinds + namespaces; adoption reuses the v1 write role, scoped by per-namespace RoleBindings on shared clusters | Discovery can be granted without write rights |
+| D-117 | Product entity; `asset` becomes "application" in API/UI (table unchanged) with required `product_id`; migration puts every existing asset into built-in `unassigned`, renaming slug collisions `<slug>-<ns>` | Smallest migration that keeps all built rows and routes working |
+| D-118 | Grant scope = (target, namespace, product) ≡ (product, environment) | A namespace hosts several products; one approver group per grant; no cross-product approval |
+| D-119 | Approver group = `product.approver_group` (required for real products); only the built-in `unassigned` product falls back to `namespace.approver_group`, which is kept solely for that | Product team approves; legacy apps keep M8 behaviour until migrated |
+| D-120 | Role bindings at product level; effective role on a stack = highest of global, namespace, product; namespace policy `allowed_products` controls which products may place apps in a namespace | Product team = operator on its apps everywhere; namespace owners still guard placement |
+| D-121 | Environment = product-scoped pointer to one (target, namespace) with a tier; the Control 8 namespace stays the placement/permission container; one environment per (product, target, namespace); legacy stacks have no environment until migrated | Namespaces are shared and carry built behaviour; environments add product vocabulary without moving cluster objects |
+| D-122 | Presets dev/uat (non-prod) and **staging/prod (prod)** via `C8_ENVIRONMENT_PRESETS`; effective tier = strictest of environment, namespace, target; raising to prod needs typed confirmation, lowering needs `global_admin` | Owner: staging needs grants; nothing becomes laxer by accident |
+| D-123 | Migration assistant: server-computed plans (dry-run + stored, versioned by row timestamps), applied in one SQLite transaction, audited per entity, undo within `C8_MIGRATION_UNDO_WINDOW` (7 d) when rows are unchanged; adoptions/deployments/grants made later are not undoable | Reviewable, atomic, reversible where it is safe to be |
+| D-124 | Roadmap: products M17, migration backend M17b, products UI M18, wizard UI M18b, discovery M19, findings M20, adoption M21 (discovery numbers shifted from the first draft M17–M19) | Products are the frame discovery results land in |

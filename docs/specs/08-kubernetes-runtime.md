@@ -65,6 +65,7 @@ Teardown: same precheck (minus dry-run), delete every object with `control-8/sta
 |---|---|
 | K8S-040 | Ownership is recorded in the DB (`asset.managed_by`, stack ↔ target/namespace) and in the cluster (labels above). The `control-8/stack` label is the claim. |
 | K8S-041 | Before apply, Control 8 GETs every object in the revision. An existing object without `control-8/stack=<this stack id>` → refuse (`ownership_conflict`, names the object). No adoption in v1. |
+| K8S-045 | Exception (M21): an adopt deployment (DSC-045) may label existing unlabelled objects, only those listed in its adoption plan with matching `uid`, only in object metadata, and may migrate field ownership from the DSC-044 manual-manager allow-list. Everything else in K8S-041..044 still applies. Cluster-wide discovery (11) uses separate read-only informers and never writes. |
 | K8S-042 | An existing object carrying `argocd.argoproj.io/instance` label or `argocd.argoproj.io/tracking-id` annotation → refuse (`argo_managed`), even if it also has Control 8 labels. |
 | K8S-043 | Server-side apply runs with `Force: false`; a field-manager conflict (someone else owns a field we set, e.g. `kubectl edit`, an HPA owning `replicas`) fails the deployment with `ownership_conflict` and the conflicting managers in `error`. Control 8 never force-applies. Users omit `replicas` when an HPA manages the workload. |
 | K8S-044 | Argo-owned workloads stay register-only: `asset.managed_by=argo` has no stacks (D-22), on any runtime. Control 8 writes nothing for them. |

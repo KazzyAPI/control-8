@@ -145,3 +145,41 @@ Read-only. Defined in `C8_TARGETS` (01, K8S-001); `GET /targets` returns name, k
 
 ### Live events — `GET /api/v1/events`
 `text/event-stream`; optional `?types=deployment.updated,stack.updated&namespace=shop`; resume with `Last-Event-ID`. Each event's `data` is `{type, at, namespace, data}` where `data` is the REST schema of the resource (`Stack`, `Deployment`, `AccessGrant`, `AuditEvent`, `Target`, `Revision`). Heartbeat `: ping` every 15 s; `reset` means "refetch everything". Full rules, catalogue and filtering: 10. Documented in openapi as `getEvents` with the `Event` schemas (OpenAPI cannot describe the stream framing; 10 is normative).
+
+## Post-v1 routes (M17–M21)
+
+Unbuilt routes carry `x-milestone: <M>` in openapi and are skipped by the API-002 parity test until their milestone (existing convention). Rules: 12 (products, environments, migration), 11 (discovery, findings, adoption).
+
+| Method | Path | Purpose | Min role | Prod | M |
+|---|---|---|---|---|---|
+| GET, POST | `/api/v1/products` | List / create | any / global_admin | | M17 |
+| GET, PATCH, DELETE | `/api/v1/products/{product}` | Read / update / delete | viewer / admin / global_admin | | M17 |
+| GET, POST | `/api/v1/products/{product}/applications` | List / create application | viewer / operator | | M17 |
+| GET, PATCH, DELETE | `/api/v1/products/{product}/applications/{app}` | Read / update (reassign: global_admin) / delete | viewer / operator / admin | | M17 |
+| POST | `/api/v1/products/{product}/applications/{app}/stacks` | Place the app in an environment (creates a draft stack) | operator (product) + `allowed_products` | | M17 |
+| GET, POST | `/api/v1/products/{product}/environments` | List / create environment | viewer / admin | | M17 |
+| GET, PATCH, DELETE | `/api/v1/products/{product}/environments/{env}` | Read / update (PRD-046) / delete (409 if stacks) | viewer / admin / admin | | M17 |
+| GET | `/api/v1/products/{product}/overview` | Applications × environments matrix (PRD-030) | viewer (product) | | M17 |
+| POST | `/api/v1/migrations/dry-run` | Compute a migration plan, not stored | MIG-008 | | M17b |
+| POST | `/api/v1/migrations/plans` | Compute + store plan | MIG-008 | | M17b |
+| GET | `/api/v1/migrations/plans/{id}` | Read plan | creator / product admin / global_admin | | M17b |
+| POST | `/api/v1/migrations/plans/{id}/apply` | Apply (one transaction; adoption items start deployments) | MIG-008 | ✔ (adoption items) | M17b |
+| POST | `/api/v1/migrations/{id}/undo` | Reverse within the undo window | MIG-008 | | M17b |
+| GET | `/api/v1/targets/{target}/discovery` | Discovery status, counts per class, truncation | viewer (any ns) | | M19 |
+| GET | `/api/v1/targets/{target}/discovery/namespaces` | K8s namespaces: mapping, tier, system flag, class counts | viewer (any ns) | | M19 |
+| PUT, DELETE | `/api/v1/targets/{target}/namespace-mappings/{k8s_ns}` | Set/remove explicit mapping `{namespace}` | global_admin | | M19 |
+| GET | `/api/v1/discovery/workloads` | `?target=&namespace=&k8s_namespace=&class=&tier=&product=&kind=&q=&include_gone=` | per DSC-022/024 | | M19 |
+| GET | `/api/v1/discovery/workloads/{id}` | One workload | per DSC-022/024 | | M19 |
+| POST | `/api/v1/discovery/workloads/assign` | Bulk-assign to a product (DSC-024) | operator (product) + ns admin | | M19 |
+| GET | `/api/v1/findings` | `?target=&namespace=&product=&type=&severity=&state=&acknowledged=` | per DSC-022/035 | | M20 |
+| GET | `/api/v1/findings/{id}` | One finding | same | | M20 |
+| POST | `/api/v1/findings/{id}/acknowledge` | `{reason, expires_at?}` | ns admin / product admin / global_admin | | M20 |
+| POST | `/api/v1/findings/{id}/unacknowledge` | | same | | M20 |
+| POST | `/api/v1/discovery/adoptions` | Adoption plan (no cluster write) | operator (product) | | M21 |
+| GET | `/api/v1/discovery/adoptions/{id}` | Read plan | creator / product admin / global_admin | | M21 |
+| POST | `/api/v1/discovery/adoptions/{id}/execute` | Start adopt deployment | operator (product) | ✔ | M21 |
+| POST | `/api/v1/namespaces/{ns}/stacks/{stack}/release` | Stop managing, keep objects | operator | ✔ | M21 |
+
+Changed shapes (M17): `Stack`, `Deployment` add `product`, `application`, `environment` (nullable); `AccessGrantCreate` adds `product` (default `unassigned`); `AccessGrant` adds `product`, `environment`, `approver_group`; `RoleBinding(Create)` adds `product`; `Principal` adds `approver_for_products`; `PolicyRules` adds `allowed_products`; `Asset` adds `product`, `external_ref`, extended `managed_by`; `POST /namespaces/{ns}/stacks` accepts `product` (400 `asset_ambiguous` without it when ambiguous) and is limited to `unassigned` apps for new stacks (PRD-044). M19: `Target` adds `discovery`. M21: `Deployment.action` adds `adopt`, `release`; `Revision.origin` adds `adoption`.
+
+New problem codes: `approver_group_missing` (now per product), `product_not_allowed_in_namespace`, `asset_ambiguous`, `plan_stale`, `undo_conflict`, `not_adoptable`, `tool_managed`, `secret_not_adoptable`, `spec_change_detected`, `namespace_mapping_mismatch`, `discovery_unavailable`.

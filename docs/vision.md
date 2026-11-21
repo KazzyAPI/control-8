@@ -31,6 +31,10 @@ Images are produced elsewhere (CI → registry). Control 8 **registers** and **b
 
 Every namespace and target is `prod` or `non-prod`. Non-prod: a normal namespace role deploys freely. Prod: nobody deploys by default; a user requests a **time-boxed access grant** (scope, reason, optional ticket, duration), a member of the **owning product team's approver group** approves it (never the requester), and it expires on its own. Break-glass exists for when the IdP is down and is loudly audited.
 
+## Products, environments and the whole cluster
+
+Teams think in **products**: a product owns several applications, its own environments (dev, uat, staging, prod — staging and prod are prod tier) and its own approver group, and the product page shows every app across every environment live. Control 8 also **sees everything in each cluster**, not only what it deployed: workloads are discovered read-only, classified (Control 8, Argo, Flux, Helm, operator, system, ungoverned), mapped to products and environments, and checked against policy as findings — "ungoverned in prod" is the headline number. Findings report; they cannot stop someone with their own kubeconfig (an admission policy can, documented as optional hardening). Ungoverned workloads can be adopted into a product without restarting anything; tool-managed ones are registered, never taken over. A migration assistant moves legacy apps into products and environments with a reviewable, reversible plan.
+
 ## Safety profiles
 
 Chosen per revision; must be obvious in UI and API:

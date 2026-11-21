@@ -112,7 +112,7 @@ No other runtime (Go) or frontend (`web/package.json`) dependencies without a de
 | `C8_BOOTSTRAP_ADMIN_GROUP` | unset | IdP group made `global_admin` on startup if no global admin binding exists (AUTH-021) |
 | `C8_GRANT_MAX` | `4h` | Default max grant duration |
 | `C8_GRANT_MAX_CAP` | `24h` | Hard cap; `C8_GRANT_MAX` must be ≤ it |
-| `C8_TARGETS` | `[]` | ConfigMap: JSON list of targets (K8S-001) |
+| `C8_TARGETS` | `[]` | ConfigMap: JSON list of targets (K8S-001); M19 adds per-target `discovery` (`on`/`off`, default `on`), `discovery_system_namespaces`, `discovery_exclude_namespaces` (DSC-001/006) |
 | `C8_KUBECONFIG_*` | unset | Secret: kubeconfig contents referenced by a target's `kubeconfig_env` |
 | `C8_TOKENS` | `[]` | Secret: JSON list of static token definitions with hashes (AUTH-031) |
 | `C8_WEBHOOK_URL` / `C8_WEBHOOK_SECRET` | unset | Grant notifications (GRT-040); secret in Secret |
@@ -126,6 +126,11 @@ No other runtime (Go) or frontend (`web/package.json`) dependencies without a de
 | `C8_REGISTRY_AUTH` | unset | Secret: Docker `config.json` contents for private registry digest lookups |
 | `C8_DOCKER_HOST` | unset | *(Docker track)* e.g. `unix:///var/run/docker.sock`; seeds target `local` when set |
 | `C8_PARACHUTE_URL`, `C8_PARACHUTE_TOKEN`, `C8_PARACHUTE_POLL`, `C8_PARACHUTE_SCOPE` | unset / unset / `30s` / `control-8` | *(Docker track)* 04 |
+| `C8_ENVIRONMENT_PRESETS` | `[{"name":"dev","tier":"non-prod"},{"name":"uat","tier":"non-prod"},{"name":"staging","tier":"prod"},{"name":"prod","tier":"prod"}]` | M17: environment presets offered by the wizard (PRD-041/042) |
+| `C8_MIGRATION_UNDO_WINDOW` | `168h` | M17b: undo window for migration plans (MIG-007) |
+| `C8_DISCOVERY_MAX` | `20000` | M19: max discovered workloads per target in the read model (DSC-005) |
+| `C8_DISCOVERY_SYSTEM_NAMESPACES` | `kube-system,kube-public,kube-node-lease` | M19: class `system` namespaces (DSC-006) |
+| `C8_DISCOVERY_EXCLUDE_NAMESPACES` | empty | M19: namespaces not recorded (DSC-006) |
 | `C8_LOG_LEVEL` | `info` | |
 
 Every secret var (`C8_OIDC_CLIENT_SECRET`, `C8_BREAKGLASS_HASH`, `C8_TOKENS`, `C8_KUBECONFIG_*`, `C8_WEBHOOK_SECRET`, `C8_REGISTRY_AUTH`, `C8_PARACHUTE_TOKEN`) is read from env, or from a file when `<VAR>_FILE` is set (both set → exit 2). Invalid config MUST exit with code 2 and name the variable (value redacted when secret). Nothing in config is editable through the UI/API.
