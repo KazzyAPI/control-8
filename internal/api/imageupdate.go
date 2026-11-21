@@ -91,7 +91,7 @@ func (v newRev) details(x stackRec, workload, container, image string) map[strin
 
 func (s *server) publishRevision(x stackRec, id string) {
 	full, _ := scanRev(s.db.QueryRow(`SELECT `+revCols+` FROM revision WHERE id=?`, id), x.Runtime, false)
-	s.publish(events.Event{Type: "revision.created", At: s.now(), Namespace: x.NS, Data: full})
+	s.publish(events.Event{Type: "revision.created", At: s.now(), Namespace: x.NS, Product: x.ProdID, Data: full})
 }
 
 // createImageUpdate builds revision N+1 (desired with one container image replaced), re-runs policy and stores it

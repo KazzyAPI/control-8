@@ -171,6 +171,24 @@ func (s *server) approverFor(groups []string) []string {
 	return out
 }
 
+// approverForProducts lists product slugs whose approver_group is one of groups (PRD-023).
+func (s *server) approverForProducts(groups []string) []string {
+	out := []string{}
+	rows, err := s.db.Query(`SELECT slug, approver_group FROM product WHERE approver_group IS NOT NULL ORDER BY slug`)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var slug, g string
+		rows.Scan(&slug, &g)
+		if slices.Contains(groups, g) {
+			out = append(out, slug)
+		}
+	}
+	return out
+}
+
 // htmlPage serves the minimal /no-access page (/login is an SPA route).
 func htmlPage(title, body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -44,7 +44,7 @@ func ptrStr(p *string) string {
 }
 
 // grantRef is what a gated action ran under: a grant, or the break-glass bypass (GRT-014, GRT-016).
-type grantRef struct{ ID, Bypass string }
+type grantRef struct{ ID, Bypass, Product string }
 
 func (g grantRef) details(d map[string]any) map[string]any {
 	if d == nil {
@@ -55,6 +55,9 @@ func (g grantRef) details(d map[string]any) map[string]any {
 	}
 	if g.Bypass != "" {
 		d["grant_bypass"] = g.Bypass
+	}
+	if g.Product != "" {
+		d["product"] = g.Product // PRD-024
 	}
 	return d
 }
@@ -77,24 +80,24 @@ func (s *server) grantOK(w http.ResponseWriter, r *http.Request, p *auth.Princip
 	case x.Tier != "prod":
 		return true
 	case p.BreakGlass:
-		gr.Bypass = "break_glass"
+		gr.Bypass, gr.Product = "break_glass", x.Product
 		return true
 	}
 	now := store.Ts(s.now())
 	var id string
-	if uid := s.grantUser(p); uid != "" {
-		s.db.QueryRow(`SELECT id FROM access_grant WHERE requester_id=? AND target_id=? AND namespace_id=? AND status IN ('approved','active')
-			AND starts_at<=? AND expires_at>? ORDER BY expires_at DESC LIMIT 1`, uid, x.TargetID, x.NSID, now, now).Scan(&id)
+	if uid := s.grantUser(p); uid != "" { // PRD-020: scope is (target, namespace, product)
+		s.db.QueryRow(`SELECT id FROM access_grant WHERE requester_id=? AND target_id=? AND namespace_id=? AND product_id=? AND status IN ('approved','active')
+			AND starts_at<=? AND expires_at>? ORDER BY expires_at DESC LIMIT 1`, uid, x.TargetID, x.NSID, x.ProdID, now, now).Scan(&id)
 	}
 	if id != "" {
-		gr.ID = id
+		gr.ID, gr.Product = id, x.Product
 		return true
 	}
-	s.auditNS(r, p, x.NS, action, "stack", x.ID, "denied", map[string]any{"reason": "grant_required"})
+	s.auditNS(r, p, x.NS, action, "stack", x.ID, "denied", map[string]any{"reason": "grant_required", "product": x.Product})
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(403)
 	json.NewEncoder(w).Encode(map[string]any{"type": "about:blank", "title": "Forbidden", "status": 403, "code": "grant_required",
-		"detail": "prod deployments need an active access grant", "scope": map[string]string{"target": x.Target, "namespace": x.NS}})
+		"detail": "prod deployments need an active access grant", "scope": map[string]string{"target": x.Target, "namespace": x.NS, "product": x.Product}})
 	return false
 }
 
@@ -108,7 +111,7 @@ func (s *server) grantStillValid(d depRec) bool {
 	}
 	now := store.Ts(s.now())
 	var n int
-	s.db.QueryRow(`SELECT count(*) FROM access_grant WHERE id=? AND status IN ('approved','active') AND starts_at<=? AND expires_at>?`, *d.GrantID, now, now).Scan(&n)
+	s.db.QueryRow(`SELECT count(*) FROM access_grant WHERE id=? AND product_id=? AND status IN ('approved','active') AND starts_at<=? AND expires_at>?`, *d.GrantID, d.ProdID, now, now).Scan(&n)
 	return n == 1
 }
 
@@ -118,16 +121,31 @@ type grantRec struct {
 	Ticket, StartsAt, ExpiresAt, Approver, DecidedAt, Note, RevBy, RevAt, RevReason   *string
 	Minutes                                                                           int
 	Rowid                                                                             int64
+	ProdID, Product                                                                   string
+	Env, NSGroup, ProdGroup                                                           *string
+	Builtin                                                                           bool
+}
+
+// resolved is the current approver group (PRD-021): the product's; only the built-in `unassigned` product
+// falls back to the namespace's. "" = none.
+func (g grantRec) resolved() string {
+	if g.Builtin {
+		return ptrStr(g.NSGroup)
+	}
+	return ptrStr(g.ProdGroup)
 }
 
 const grantSel = `SELECT g.id,g.requester_id,t.name,n.slug,g.namespace_id,g.target_id,g.reason,g.status,g.approver_group,g.created_at,
-	CASE WHEN n.environment_tier='prod' OR t.environment_tier='prod' THEN 'prod' ELSE 'non-prod' END,
-	g.ticket_ref,g.starts_at,g.expires_at,g.approver_id,g.decided_at,g.decision_note,g.revoked_by,g.revoked_at,g.revoke_reason,g.duration_minutes,g.rowid
-	FROM access_grant g JOIN namespace n ON n.id=g.namespace_id JOIN target t ON t.id=g.target_id `
+	CASE WHEN n.environment_tier='prod' OR t.environment_tier='prod' OR e.tier='prod' THEN 'prod' ELSE 'non-prod' END,
+	g.ticket_ref,g.starts_at,g.expires_at,g.approver_id,g.decided_at,g.decision_note,g.revoked_by,g.revoked_at,g.revoke_reason,g.duration_minutes,g.rowid,
+	g.product_id,pr.slug,e.name,n.approver_group,pr.approver_group,pr.builtin
+	FROM access_grant g JOIN namespace n ON n.id=g.namespace_id JOIN target t ON t.id=g.target_id JOIN product pr ON pr.id=g.product_id
+	LEFT JOIN environment e ON e.product_id=g.product_id AND e.target_id=g.target_id AND e.namespace_id=g.namespace_id `
 
 func scanGrant(row interface{ Scan(...any) error }) (g grantRec, err error) {
 	err = row.Scan(&g.ID, &g.Requester, &g.Target, &g.NS, &g.NSID, &g.TargetID, &g.Reason, &g.Status, &g.ApproverGroup, &g.Created, &g.Tier,
-		&g.Ticket, &g.StartsAt, &g.ExpiresAt, &g.Approver, &g.DecidedAt, &g.Note, &g.RevBy, &g.RevAt, &g.RevReason, &g.Minutes, &g.Rowid)
+		&g.Ticket, &g.StartsAt, &g.ExpiresAt, &g.Approver, &g.DecidedAt, &g.Note, &g.RevBy, &g.RevAt, &g.RevReason, &g.Minutes, &g.Rowid,
+		&g.ProdID, &g.Product, &g.Env, &g.NSGroup, &g.ProdGroup, &g.Builtin)
 	return
 }
 
@@ -157,15 +175,21 @@ func mustTs(s string) time.Time {
 }
 
 func (g grantRec) JSON(now time.Time) map[string]any {
-	return map[string]any{"id": g.ID, "requester": g.Requester, "target": g.Target, "namespace": g.NS, "environment_tier": g.Tier,
+	return map[string]any{"id": g.ID, "requester": g.Requester, "target": g.Target, "namespace": g.NS, "product": g.Product, "environment": g.Env, "environment_tier": g.Tier,
 		"reason": g.Reason, "ticket_ref": g.Ticket, "duration_minutes": g.Minutes, "status": g.eff(now), "starts_at": g.StartsAt,
 		"expires_at": g.ExpiresAt, "approver_group": g.ApproverGroup, "approver": g.Approver, "decided_at": g.DecidedAt,
 		"decision_note": g.Note, "revoked_by": g.RevBy, "revoked_at": g.RevAt, "revoke_reason": g.RevReason, "created_at": g.Created}
 }
 
-// canSee: the requester, a member of the namespace's current approver_group, or global_admin (09 API table).
+// isApprover: member of the grant's current resolved approver group (GRT-020, PRD-021).
+func (g grantRec) isApprover(p *auth.Principal) bool {
+	r := g.resolved()
+	return r != "" && slices.Contains(p.Groups, r)
+}
+
+// canSee: the requester, a member of the resolved approver group, or global_admin (09 API table).
 func (s *server) canSeeGrant(p *auth.Principal, g grantRec) bool {
-	return s.grantUser(p) == g.Requester || authz.Effective(s.db, p, "") == 4 || slices.Contains(s.approverFor(p.Groups), g.NS)
+	return s.grantUser(p) == g.Requester || authz.Effective(s.db, p, "") == 4 || g.isApprover(p)
 }
 
 // publishGrant emits access_grant.updated (Requester + approver group + global_admin see it, EVT filter) and,
@@ -176,7 +200,7 @@ func (s *server) publishGrant(id, hook string) {
 		return
 	}
 	j := g.JSON(s.now())
-	s.publish(events.Event{Type: "access_grant.updated", At: s.now(), Namespace: g.NS, Data: j, Requester: g.Requester})
+	s.publish(events.Event{Type: "access_grant.updated", At: s.now(), Namespace: g.NS, Data: j, Requester: g.Requester, Product: g.ProdID, Group: g.resolved()})
 	if hook != "" {
 		s.notify("access_grant."+hook, j)
 	}
@@ -245,7 +269,7 @@ func (s *server) sweep() {
 		if to == "expired" {
 			action, hook = "access_grant.expire", "expired"
 		}
-		s.auditSystem(g.NS, action, "access_grant", g.ID, "success", map[string]any{"from": g.Status})
+		s.auditSystem(g.NS, action, "access_grant", g.ID, "success", map[string]any{"from": g.Status, "product": g.Product})
 		s.publishGrant(g.ID, hook)
 	}
 }
@@ -261,20 +285,30 @@ func (s *server) sweepLoop() {
 
 func (s *server) requestGrant(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	var in struct {
-		Target, Namespace, Reason, TicketRef string
-		Minutes                              int       `json:"duration_minutes"`
-		StartsAt                             time.Time `json:"starts_at"`
+		Target, Namespace, Product, Reason, TicketRef string
+		Minutes                                       int       `json:"duration_minutes"`
+		StartsAt                                      time.Time `json:"starts_at"`
 	}
 	if !decode(w, r, &in) {
 		return
 	}
-	var nsID, group, ntier string
+	if in.Product == "" {
+		in.Product = "unassigned" // PRD-022: old clients keep working for legacy apps
+	}
+	var nsID, ntier string
 	var nsGroup *string
 	if s.db.QueryRow(`SELECT id,approver_group,environment_tier FROM namespace WHERE slug=?`, in.Namespace).Scan(&nsID, &nsGroup, &ntier) != nil {
 		problem(w, 404, "not_found", "no such namespace")
 		return
 	}
-	if err := authz.Require(s.db, p, in.Namespace, "operator"); err != nil { // GRT-022
+	var prodID string
+	var prodGroup *string
+	var builtin bool
+	if s.db.QueryRow(`SELECT id,approver_group,builtin FROM product WHERE slug=?`, in.Product).Scan(&prodID, &prodGroup, &builtin) != nil {
+		problem(w, 400, "invalid_body", "no such product")
+		return
+	}
+	if err := authz.RequireIn(s.db, p, in.Namespace, prodID, "operator"); err != nil { // GRT-022: namespace or product operator
 		s.denyNS(w, r, p, in.Namespace, "access_grant.request", err)
 		return
 	}
@@ -283,8 +317,14 @@ func (s *server) requestGrant(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		problem(w, 400, "invalid_body", "no such target")
 		return
 	}
+	var envProd int // PRD-043: a prod environment of the product at this placement makes the scope prod
+	s.db.QueryRow(`SELECT count(*) FROM environment WHERE product_id=? AND target_id=? AND namespace_id=? AND tier='prod'`, prodID, tgtID, nsID).Scan(&envProd)
 	now := s.now()
 	max := int(s.cfg.GrantMax / time.Minute)
+	group := ptrStr(prodGroup)
+	if builtin { // PRD-021: only `unassigned` falls back to the namespace group
+		group = ptrStr(nsGroup)
+	}
 	switch {
 	case utf8Len(in.Reason) < 10 || utf8Len(in.Reason) > 500, utf8Len(in.TicketRef) > 100:
 		problem(w, 400, "invalid_body", "reason must be 10..500 characters, ticket_ref at most 100")
@@ -295,15 +335,14 @@ func (s *server) requestGrant(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	case !in.StartsAt.IsZero() && in.StartsAt.After(now.Add(grantMaxAhead)):
 		problem(w, 400, "invalid_body", "starts_at must be at most 7 days ahead")
 		return
-	case ntier != "prod" && ttier != "prod":
+	case ntier != "prod" && ttier != "prod" && envProd == 0:
 		problem(w, 400, "invalid_body", "scope is not prod; no grant needed")
 		return
-	case nsGroup == nil || *nsGroup == "":
-		s.auditNS(r, p, in.Namespace, "access_grant.request", "access_grant", "", "denied", map[string]any{"reason": "approver_group_missing"})
-		problem(w, 409, "approver_group_missing", "the namespace has no approver_group")
+	case group == "":
+		s.auditNS(r, p, in.Namespace, "access_grant.request", "access_grant", "", "denied", map[string]any{"reason": "approver_group_missing", "product": in.Product})
+		problem(w, 409, "approver_group_missing", "the product has no approver_group (unassigned: the namespace has none)")
 		return
 	}
-	group = *nsGroup
 	uid := s.grantUser(p)
 	if uid == "" {
 		problem(w, 403, "forbidden", "token owner is not resolved")
@@ -315,13 +354,13 @@ func (s *server) requestGrant(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	if !in.StartsAt.IsZero() {
 		rs = store.Ts(in.StartsAt)
 	}
-	if _, err := s.db.Exec(`INSERT INTO access_grant(id,requester_id,target_id,namespace_id,reason,ticket_ref,duration_minutes,req_starts_at,status,approver_group,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?,'requested',?,?,?)`, id, uid, tgtID, nsID, in.Reason, nz(in.TicketRef), in.Minutes, rs, group, store.Ts(now), store.Ts(now)); err != nil {
-		s.auditNS(r, p, in.Namespace, "access_grant.request", "access_grant", "", "failed", map[string]any{"reason": "grant_exists"})
+	if _, err := s.db.Exec(`INSERT INTO access_grant(id,requester_id,target_id,namespace_id,product_id,reason,ticket_ref,duration_minutes,req_starts_at,status,approver_group,created_at,updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,'requested',?,?,?)`, id, uid, tgtID, nsID, prodID, in.Reason, nz(in.TicketRef), in.Minutes, rs, group, store.Ts(now), store.Ts(now)); err != nil {
+		s.auditNS(r, p, in.Namespace, "access_grant.request", "access_grant", "", "failed", map[string]any{"reason": "grant_exists", "product": in.Product})
 		problem(w, 409, "grant_exists", "an open grant already exists for this scope")
 		return
 	}
-	s.auditNS(r, p, in.Namespace, "access_grant.request", "access_grant", id, "success", map[string]any{"target": in.Target, "duration_minutes": in.Minutes})
+	s.auditNS(r, p, in.Namespace, "access_grant.request", "access_grant", id, "success", map[string]any{"target": in.Target, "duration_minutes": in.Minutes, "product": in.Product})
 	s.publishGrant(id, "requested")
 	g, _ := scanGrant(s.db.QueryRow(grantSel+`WHERE g.id=?`, id))
 	w.Header().Set("Location", "/api/v1/access-grants/"+id)
@@ -381,10 +420,10 @@ func (s *server) grantList(w http.ResponseWriter, r *http.Request, p *auth.Princ
 	}
 	rows.Close()
 	uid, now := s.grantUser(p), s.now()
-	admin, appr := authz.Effective(s.db, p, "") == 4, s.approverFor(p.Groups)
+	admin := authz.Effective(s.db, p, "") == 4
 	items, next := []map[string]any{}, (*string)(nil)
 	for _, g := range all {
-		if !(g.Requester == uid || !mine && (admin || slices.Contains(appr, g.NS))) || q.Get("status") != "" && g.eff(now) != q.Get("status") {
+		if !(g.Requester == uid || !mine && (admin || g.isApprover(p))) || q.Get("status") != "" && g.eff(now) != q.Get("status") {
 			continue
 		}
 		if len(items) == limit {
@@ -409,7 +448,7 @@ func (s *server) decide(w http.ResponseWriter, r *http.Request, p *auth.Principa
 		return g, false
 	}
 	deny := func(reason, msg string) (grantRec, bool) {
-		s.auditNS(r, p, g.NS, action, "access_grant", g.ID, "denied", map[string]any{"reason": reason})
+		s.auditNS(r, p, g.NS, action, "access_grant", g.ID, "denied", map[string]any{"reason": reason, "product": g.Product})
 		problem(w, 403, reason, msg)
 		return g, false
 	}
@@ -418,8 +457,8 @@ func (s *server) decide(w http.ResponseWriter, r *http.Request, p *auth.Principa
 		return deny("token_not_allowed", "tokens cannot decide grants")
 	case p.BreakGlass:
 		return deny("break_glass_not_allowed", "break-glass sessions cannot decide grants")
-	case !slices.Contains(s.approverFor(p.Groups), g.NS):
-		return deny("forbidden", "only members of the namespace approver group can decide grants")
+	case !g.isApprover(p):
+		return deny("forbidden", "only members of the grant's approver group can decide grants")
 	case p.ID == g.Requester:
 		return deny("self_approval", "the approver must differ from the requester")
 	case g.eff(s.now()) != "requested":
@@ -470,7 +509,7 @@ func (s *server) approveGrant(w http.ResponseWriter, r *http.Request, p *auth.Pr
 		problem(w, 409, "invalid_state", "grant is not awaiting a decision")
 		return
 	}
-	s.auditNS(r, p, g.NS, "access_grant.approve", "access_grant", g.ID, "success", map[string]any{"duration_minutes": mins})
+	s.auditNS(r, p, g.NS, "access_grant.approve", "access_grant", g.ID, "success", map[string]any{"duration_minutes": mins, "product": g.Product})
 	s.publishGrant(g.ID, "approved")
 	g, _ = scanGrant(s.db.QueryRow(grantSel+`WHERE g.id=?`, g.ID))
 	writeJSON(w, 200, g.JSON(now))
@@ -495,7 +534,7 @@ func (s *server) denyGrant(w http.ResponseWriter, r *http.Request, p *auth.Princ
 		problem(w, 409, "invalid_state", "grant is not awaiting a decision")
 		return
 	}
-	s.auditNS(r, p, g.NS, "access_grant.deny", "access_grant", g.ID, "success", nil)
+	s.auditNS(r, p, g.NS, "access_grant.deny", "access_grant", g.ID, "success", map[string]any{"product": g.Product})
 	s.publishGrant(g.ID, "denied")
 	g, _ = scanGrant(s.db.QueryRow(grantSel+`WHERE g.id=?`, g.ID))
 	writeJSON(w, 200, g.JSON(s.now()))
@@ -515,8 +554,8 @@ func (s *server) revokeGrant(w http.ResponseWriter, r *http.Request, p *auth.Pri
 		problem(w, 400, "invalid_body", "reason is required (at most 500 characters)")
 		return
 	}
-	if !(s.grantUser(p) == g.Requester || authz.Effective(s.db, p, "") == 4 || slices.Contains(s.approverFor(p.Groups), g.NS)) {
-		s.auditNS(r, p, g.NS, "access_grant.revoke", "access_grant", g.ID, "denied", nil)
+	if !(s.grantUser(p) == g.Requester || authz.Effective(s.db, p, "") == 4 || g.isApprover(p)) {
+		s.auditNS(r, p, g.NS, "access_grant.revoke", "access_grant", g.ID, "denied", map[string]any{"product": g.Product})
 		problem(w, 403, "forbidden", "not allowed to revoke this grant")
 		return
 	}
@@ -530,7 +569,7 @@ func (s *server) revokeGrant(w http.ResponseWriter, r *http.Request, p *auth.Pri
 		problem(w, 409, "invalid_state", "grant is not open")
 		return
 	}
-	s.auditNS(r, p, g.NS, "access_grant.revoke", "access_grant", g.ID, "success", map[string]any{"was": g.Status})
+	s.auditNS(r, p, g.NS, "access_grant.revoke", "access_grant", g.ID, "success", map[string]any{"was": g.Status, "product": g.Product})
 	s.publishGrant(g.ID, "revoked")
 	g, _ = scanGrant(s.db.QueryRow(grantSel+`WHERE g.id=?`, g.ID))
 	writeJSON(w, 200, g.JSON(s.now()))

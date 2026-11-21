@@ -40,18 +40,31 @@ type depRec struct {
 	Started, Finished, Error                                                    *string
 	Output                                                                      string
 	Rowid                                                                       int64
+	ProdID, Product, App                                                        string
+	Env                                                                         *string
 }
 
 const depSel = `SELECT d.id,d.stack_id,n.slug,st.slug,d.action,d.trigger,r.number,st.runtime,COALESCE(r.safety_profile,st.safety_profile),
-	CASE WHEN n.environment_tier='prod' OR t.environment_tier='prod' THEN 'prod' ELSE 'non-prod' END,
-	d.status,d.requested_by,d.approved_by,d.grant_id,d.grant_bypass,d.reason,d.rollout,d.started_at,d.finished_at,d.error,d.output,d.rowid
+	CASE WHEN n.environment_tier='prod' OR t.environment_tier='prod' OR e.tier='prod' THEN 'prod' ELSE 'non-prod' END,
+	d.status,d.requested_by,d.approved_by,d.grant_id,d.grant_bypass,d.reason,d.rollout,d.started_at,d.finished_at,d.error,d.output,d.rowid,
+	a.product_id,p.slug,a.slug,e.name
 	FROM deployment d JOIN stack st ON st.id=d.stack_id JOIN namespace n ON n.id=st.namespace_id
+	JOIN asset a ON a.id=st.asset_id JOIN product p ON p.id=a.product_id LEFT JOIN environment e ON e.id=st.environment_id
 	LEFT JOIN target t ON t.id=st.target_id LEFT JOIN revision r ON r.id=d.revision_id `
 
 func scanDep(row interface{ Scan(...any) error }) (d depRec, err error) {
 	err = row.Scan(&d.ID, &d.StackID, &d.NS, &d.Stack, &d.Action, &d.Trigger, &d.Revision, &d.Runtime, &d.Profile, &d.Tier,
-		&d.Status, &d.RequestedBy, &d.ApprovedBy, &d.GrantID, &d.GrantBypass, &d.Reason, &d.Rollout, &d.Started, &d.Finished, &d.Error, &d.Output, &d.Rowid)
+		&d.Status, &d.RequestedBy, &d.ApprovedBy, &d.GrantID, &d.GrantBypass, &d.Reason, &d.Rollout, &d.Started, &d.Finished, &d.Error, &d.Output, &d.Rowid, &d.ProdID, &d.Product, &d.App, &d.Env)
 	return
+}
+
+// gref is the grant the deployment ran under, with the product for audit (GRT-014, PRD-024); empty for non-prod.
+func (d depRec) gref() grantRef {
+	g := grantRef{ID: ptrStr(d.GrantID), Bypass: ptrStr(d.GrantBypass)}
+	if g.ID != "" || g.Bypass != "" {
+		g.Product = d.Product
+	}
+	return g
 }
 
 // JSON is the Deployment shape (03); events omit output (AUTH-043).
@@ -60,7 +73,7 @@ func (d depRec) JSON(withOutput bool) map[string]any {
 	if d.Rollout != nil {
 		rollout = json.RawMessage(*d.Rollout)
 	}
-	m := map[string]any{"id": d.ID, "namespace": d.NS, "stack": d.Stack, "action": d.Action, "trigger": d.Trigger, "revision": d.Revision,
+	m := map[string]any{"id": d.ID, "namespace": d.NS, "stack": d.Stack, "product": d.Product, "application": d.App, "environment": d.Env, "action": d.Action, "trigger": d.Trigger, "revision": d.Revision,
 		"runtime": d.Runtime, "safety_profile": d.Profile, "environment_tier": d.Tier, "status": d.Status, "requested_by": d.RequestedBy,
 		"approved_by": d.ApprovedBy, "grant_id": d.GrantID, "grant_bypass": d.GrantBypass, "reason": d.Reason, "rollout": rollout,
 		"started_at": d.Started, "finished_at": d.Finished, "error": d.Error}
@@ -73,7 +86,7 @@ func (d depRec) JSON(withOutput bool) map[string]any {
 // publishDep emits deployment.updated; status transitions go out directly, rollout progress through s.progress (EVT-005).
 func (s *server) publishDep(id string) {
 	if d, err := scanDep(s.db.QueryRow(depSel+`WHERE d.id=?`, id)); err == nil {
-		s.publish(events.Event{Type: "deployment.updated", At: s.now(), Namespace: d.NS, Data: d.JSON(false)})
+		s.publish(events.Event{Type: "deployment.updated", At: s.now(), Namespace: d.NS, Product: d.ProdID, Data: d.JSON(false)})
 	}
 }
 
@@ -94,7 +107,7 @@ func (s *server) loadDep(w http.ResponseWriter, r *http.Request, p *auth.Princip
 		problem(w, 404, "not_found", "not found")
 		return d, false
 	}
-	if err := authz.Require(s.db, p, d.NS, min); err != nil {
+	if err := authz.RequireIn(s.db, p, d.NS, d.ProdID, min); err != nil {
 		s.denyNS(w, r, p, d.NS, action, err)
 		return d, false
 	}
@@ -206,7 +219,7 @@ func (s *server) requestDeployment(w http.ResponseWriter, r *http.Request, p *au
 	if !ok {
 		return
 	}
-	if x.Frozen && authz.Require(s.db, p, x.NS, "admin") != nil { // K8S-055: only an admin's deploy clears the freeze
+	if x.Frozen && s.requireStack(p, x, "admin") != nil { // K8S-055: only an admin's deploy clears the freeze
 		problem(w, 409, "rollout_frozen", "rollout is frozen after a failed rollback; an admin must deploy")
 		return
 	}
@@ -357,7 +370,7 @@ func (s *server) cancelDeployment(w http.ResponseWriter, r *http.Request, p *aut
 		return
 	}
 	if p.ID != d.RequestedBy { // requester or admin
-		if err := authz.Require(s.db, p, d.NS, "admin"); err != nil {
+		if err := authz.RequireIn(s.db, p, d.NS, d.ProdID, "admin"); err != nil {
 			s.denyNS(w, r, p, d.NS, "deployment.cancel", err)
 			return
 		}
@@ -437,7 +450,7 @@ func (s *server) execute(id string) {
 	now := store.Ts(s.now())
 	if !s.grantStillValid(d) { // GRT-012: nothing is applied on an expired or revoked grant
 		s.db.Exec(`UPDATE deployment SET status='failed',error='grant_expired',finished_at=?,updated_at=? WHERE id=? AND status='queued'`, now, now, id)
-		s.auditSys(d.NS, "deployment.run", d.ID, "failed", grantRef{ptrStr(d.GrantID), ptrStr(d.GrantBypass)}.details(map[string]any{"stack": d.Stack, "action": d.Action, "error": "grant_expired"}))
+		s.auditSys(d.NS, "deployment.run", d.ID, "failed", d.gref().details(map[string]any{"stack": d.Stack, "action": d.Action, "error": "grant_expired"}))
 		s.publishDep(id)
 		return
 	}
@@ -508,7 +521,7 @@ func (s *server) finish(d depRec, x stackRec, number int, profile, out string, r
 	}
 	status, now := "succeeded", store.Ts(s.now())
 	var errText any
-	details := grantRef{ptrStr(d.GrantID), ptrStr(d.GrantBypass)}.details(map[string]any{"stack": x.Slug, "action": d.Action})
+	details := d.gref().details(map[string]any{"stack": x.Slug, "action": d.Action})
 	outcome := "success"
 	if runErr != nil {
 		status, outcome, errText = "failed", "failed", runErr.Error()
@@ -543,7 +556,7 @@ func (s *server) finish(d depRec, x stackRec, number int, profile, out string, r
 	}
 	if nx, err := scanStack(s.db.QueryRow(stackSel+`WHERE st.id=?`, x.ID)); err == nil {
 		if nx.State == "removed" {
-			s.publish(events.Event{Type: "stack.removed", At: s.now(), Namespace: nx.NS, Data: map[string]string{"namespace": nx.NS, "slug": nx.Slug}})
+			s.publish(events.Event{Type: "stack.removed", At: s.now(), Namespace: nx.NS, Product: nx.ProdID, Data: map[string]string{"namespace": nx.NS, "slug": nx.Slug}})
 		} else if runErr == nil || nx.State != x.State || rb != "" {
 			s.publishStack(nx)
 		}

@@ -27,6 +27,8 @@ func TestConfigTable(t *testing.T) {
 		{"both env and file", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_TOKENS": "[]", "C8_TOKENS_FILE": "/s/tok"}, "C8_TOKENS"},
 		{"missing file", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_BREAKGLASS_HASH_FILE": "/nope"}, "C8_BREAKGLASS_HASH_FILE"},
 		{"oidc half set", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_OIDC_ISSUER": "https://i"}, "C8_OIDC_CLIENT_ID"},
+		{"presets ok", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_ENVIRONMENT_PRESETS": `[{"name":"qa","tier":"non-prod"}]`}, ""},                      // PRD-041
+		{"presets bad tier", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_ENVIRONMENT_PRESETS": `[{"name":"qa","tier":"x"}]`}, "C8_ENVIRONMENT_PRESETS"}, // PRD-041
 		{"bad log level", map[string]string{"C8_PUBLIC_URL": "http://x", "C8_LOG_LEVEL": "loud"}, "C8_LOG_LEVEL"},
 	}
 	for _, tc := range cases {

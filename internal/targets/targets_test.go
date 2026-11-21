@@ -150,7 +150,7 @@ func TestK8S002_TargetInUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Exec(`INSERT INTO namespace(id,slug,display_name,environment_tier,created_at,updated_at) VALUES('ns_1','n','n','non-prod','t','t')`)
-	db.Exec(`INSERT INTO asset(id,namespace_id,slug,name,created_at,updated_at) VALUES('ast_1','ns_1','w','w','t','t')`)
+	db.Exec(`INSERT INTO asset(id,product_id,home_namespace_id,slug,name,created_at,updated_at) VALUES('ast_1','prd_unassigned','ns_1','w','w','t','t')`)
 	db.Exec(`INSERT INTO stack(id,namespace_id,asset_id,target_id,slug,runtime,created_at,updated_at) VALUES('stk_1','ns_1','ast_1',?,'s','kubernetes','t','t')`, a[1].ID)
 	err := Sync(db, []Spec{spec("a")})
 	if !errors.Is(err, ErrInUse) || !strings.Contains(err.Error(), `"b"`) {

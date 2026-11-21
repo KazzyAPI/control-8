@@ -44,7 +44,7 @@ paths:
   /me:
     get: {tags: [meta], operationId: getMe, responses: {'200': {description: Principal, content: {application/json: {schema: {$ref: '#/components/schemas/Principal'}}}}}}
   /inventory:
-    get: {tags: [stacks], operationId: getInventory, responses: {'200': {description: All visible stacks, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
+    get: {tags: [stacks], operationId: getInventory, parameters: [{name: product, in: query, schema: {type: string}, description: 'M17c/CTX-004: filter to one product'}], responses: {'200': {description: All visible stacks, content: {application/json: {schema: {$ref: '#/components/schemas/StackList'}}}}}}
 
   /targets:
     get: {tags: [targets], operationId: listTargets, description: 'Read-only; targets are defined in C8_TARGETS (D-49)', responses: {'200': {description: Targets, content: {application/json: {schema: {$ref: '#/components/schemas/TargetList'}}}}}}
@@ -140,6 +140,19 @@ paths:
     parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
     get: {tags: [stacks], operationId: listServices, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Service'}}}}}}}}}
 
+  /namespaces/{ns}/stacks/{stack}/plans:
+    x-milestone: M17e
+    parameters: [{$ref: '#/components/parameters/ns'}, {$ref: '#/components/parameters/stack'}]
+    post:
+      tags: [deployments]
+      operationId: createDeployPlan
+      description: 'Dry run (PLN-001): never writes to the cluster; rate limited; prod without grant per C8_DRYRUN_PROD_WITHOUT_GRANT (GRT-032).'
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [revision], additionalProperties: false, properties: {revision: {type: integer, minimum: 1}, action: {type: string, enum: [apply, teardown], default: apply}}}}}}
+      responses: {'201': {description: Plan, content: {application/json: {schema: {$ref: '#/components/schemas/DeployPlan'}}}}, '403': {$ref: '#/components/responses/Problem'}, '422': {$ref: '#/components/responses/Problem'}, '429': {$ref: '#/components/responses/Problem'}, '503': {$ref: '#/components/responses/Problem'}}
+  /deploy-plans/{id}:
+    x-milestone: M17e
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {tags: [deployments], operationId: getDeployPlan, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DeployPlan'}}}}, '404': {$ref: '#/components/responses/Problem'}}}
   /deployments/{id}:
     parameters: [{$ref: '#/components/parameters/id'}]
     get: {tags: [deployments], operationId: getDeployment, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Deployment'}}}}}}
@@ -158,6 +171,7 @@ paths:
       tags: [access-grants]
       operationId: listAccessGrants
       parameters:
+        - {name: product, in: query, schema: {type: string}, description: 'M17c/CTX-004: filter to one product'}
         - {name: status, in: query, schema: {$ref: '#/components/schemas/GrantStatus'}}
         - {name: namespace, in: query, schema: {type: string}}
         - {name: target, in: query, schema: {type: string}}
@@ -215,6 +229,7 @@ paths:
       tags: [audit]
       operationId: queryAudit
       parameters:
+        - {name: product, in: query, schema: {type: string}, description: 'M17c/CTX-004: filter to one product'}
         - {name: namespace, in: query, schema: {type: string}}
         - {name: action, in: query, schema: {type: string}}
         - {name: target_id, in: query, schema: {type: string}}
@@ -228,28 +243,23 @@ paths:
 
   # ---- Products, environments, migrations (M17, M17b) ----
   /products:
-    x-milestone: M17
     get: {tags: [products], operationId: listProducts, parameters: [{name: tag, in: query, schema: {type: string}}, {$ref: '#/components/parameters/limit'}, {$ref: '#/components/parameters/cursor'}], responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProductList'}}}}}}
     post: {tags: [products], operationId: createProduct, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProductCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
   /products/{product}:
-    x-milestone: M17
     parameters: [{$ref: '#/components/parameters/product'}]
     get: {tags: [products], operationId: getProduct, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}}}}
     patch: {tags: [products], operationId: updateProduct, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ProductUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Product'}}}}, '403': {$ref: '#/components/responses/Problem'}}}
     delete: {tags: [products], operationId: deleteProduct, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
   /products/{product}/applications:
-    x-milestone: M17
     parameters: [{$ref: '#/components/parameters/product'}]
     get: {tags: [products], operationId: listApplications, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AssetList'}}}}}}
     post: {tags: [products], operationId: createApplication, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
   /products/{product}/applications/{app}:
-    x-milestone: M17
     parameters: [{$ref: '#/components/parameters/product'}, {name: app, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
     get: {tags: [products], operationId: getApplication, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
     patch: {tags: [products], operationId: updateApplication, description: 'product field = reassign (global_admin, PRD-004)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AssetUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Asset'}}}}}}
     delete: {tags: [products], operationId: deleteApplication, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
   /products/{product}/applications/{app}/stacks:
-    x-milestone: M17
     parameters: [{$ref: '#/components/parameters/product'}, {name: app, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
     post:
       tags: [products]
@@ -257,20 +267,58 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {type: object, required: [environment], additionalProperties: false, properties: {environment: {$ref: '#/components/schemas/Slug'}, slug: {$ref: '#/components/schemas/Slug'}}}}}}
       responses: {'201': {description: Draft stack, content: {application/json: {schema: {$ref: '#/components/schemas/Stack'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}
   /products/{product}/environments:
-    x-milestone: M17
     parameters: [{$ref: '#/components/parameters/product'}]
     get: {tags: [products], operationId: listEnvironments, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Environment'}}}}}}}}}
     post: {tags: [products], operationId: createEnvironment, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentCreate'}}}}, responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}, '400': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
   /products/{product}/environments/{env}:
-    x-milestone: M17
     parameters: [{$ref: '#/components/parameters/product'}, {name: env, in: path, required: true, schema: {$ref: '#/components/schemas/Slug'}}]
     get: {tags: [products], operationId: getEnvironment, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}}}
     patch: {tags: [products], operationId: updateEnvironment, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/EnvironmentUpdate'}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/Environment'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
     delete: {tags: [products], operationId: deleteEnvironment, responses: {'204': {description: Deleted}, '409': {$ref: '#/components/responses/Problem'}}}
   /products/{product}/overview:
-    x-milestone: M17
     parameters: [{$ref: '#/components/parameters/product'}]
     get: {tags: [products], operationId: getProductOverview, responses: {'200': {description: Matrix, content: {application/json: {schema: {$ref: '#/components/schemas/ProductOverview'}}}}}}
+  /products/{product}/members:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/product'}]
+    get: {tags: [products], operationId: listProductMembers, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/ProductMember'}}}}}}}}}
+  /products/{product}/members/{user}:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/product'}, {name: user, in: path, required: true, schema: {type: string}}]
+    put: {tags: [products], operationId: setProductMember, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [role], additionalProperties: false, properties: {role: {$ref: '#/components/schemas/Role'}}}}}}, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/ProductMember'}}}}, '403': {$ref: '#/components/responses/Problem'}}}
+    delete: {tags: [products], operationId: removeProductMember, responses: {'204': {description: Removed}, '403': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/owners:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/product'}]
+    get: {tags: [products], operationId: listProductOwners, responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/User'}}}}}}}}}
+    post: {tags: [products], operationId: addProductOwner, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [user], additionalProperties: false, properties: {user: {type: string}}}}}}, responses: {'201': {description: Added, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}, '403': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/owners/{user}:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/product'}, {name: user, in: path, required: true, schema: {type: string}}]
+    delete: {tags: [products], operationId: removeProductOwner, responses: {'204': {description: Removed}, '409': {$ref: '#/components/responses/Problem'}}}
+  /products/{product}/access-requests:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/product'}]
+    get: {tags: [products], operationId: listProductAccessRequests, parameters: [{name: status, in: query, schema: {type: string, enum: [requested, approved, denied, cancelled]}}], responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequestList'}}}}}}
+    post: {tags: [products], operationId: requestProductAccess, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [reason], additionalProperties: false, properties: {reason: {type: string, minLength: 10, maxLength: 500}, requested_role: {type: string, enum: [viewer, operator], default: operator}}}}}}, responses: {'201': {description: Requested, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}, '409': {$ref: '#/components/responses/Problem'}}}
+  /access-requests/mine:
+    x-milestone: M17c
+    get: {tags: [products], operationId: listMyAccessRequests, responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequestList'}}}}}}
+  /access-requests/{id}/approve:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [products], operationId: approveAccessRequest, requestBody: {required: false, content: {application/json: {schema: {type: object, additionalProperties: false, properties: {granted_role: {type: string, enum: [viewer, operator]}, note: {type: string, maxLength: 500}}}}}}, responses: {'200': {description: Approved, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}, '403': {$ref: '#/components/responses/Problem'}, '409': {$ref: '#/components/responses/Problem'}}}
+  /access-requests/{id}/deny:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [products], operationId: denyAccessRequest, requestBody: {required: true, content: {application/json: {schema: {type: object, required: [note], additionalProperties: false, properties: {note: {type: string, minLength: 1, maxLength: 500}}}}}}, responses: {'200': {description: Denied, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}, '403': {$ref: '#/components/responses/Problem'}}}
+  /access-requests/{id}/cancel:
+    x-milestone: M17c
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {tags: [products], operationId: cancelAccessRequest, responses: {'200': {description: Cancelled, content: {application/json: {schema: {$ref: '#/components/schemas/AccessRequest'}}}}, '403': {$ref: '#/components/responses/Problem'}}}
+  /users:
+    x-milestone: M17c
+    get: {tags: [access], operationId: searchUsers, parameters: [{name: q, in: query, required: true, schema: {type: string, minLength: 2}}, {$ref: '#/components/parameters/limit'}], responses: {'200': {description: OK, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/User'}}}}}}}, '403': {$ref: '#/components/responses/Problem'}}}
   /migrations/dry-run:
     x-milestone: M17b
     post: {tags: [migrations], operationId: dryRunMigration, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MigrationInput'}}}}, responses: {'200': {description: Plan (not stored), content: {application/json: {schema: {$ref: '#/components/schemas/MigrationPlan'}}}}, '400': {$ref: '#/components/responses/Problem'}, '403': {$ref: '#/components/responses/Problem'}}}
@@ -461,7 +509,10 @@ components:
         detail: {type: string}
         code: {type: string}
         violations: {type: array, items: {$ref: '#/components/schemas/Violation'}}
-        scope: {type: object, description: 'grant_required only', properties: {target: {type: string}, namespace: {type: string}}}
+        scope: {type: object, description: 'grant_required only', properties: {target: {type: string}, namespace: {type: string}, product: {type: string, description: M17}, environment: {type: [string, 'null'], description: M17}}}
+        approvers: {type: object, description: 'grant_required (M17c, GRT-030)', properties: {owners: {type: array, items: {type: string}}, group: {type: [string, 'null']}}}
+        pending_grant: {type: [object, 'null'], description: 'grant_required: caller''s requested/approved grant, if any', properties: {id: {type: string}, status: {type: string}}}
+        request_url: {type: [string, 'null'], description: 'grant_required / not_a_member: where to request access'}
     Violation: {type: object, required: [rule, message], properties: {rule: {type: string}, service: {type: [string, 'null'], description: 'Kind/name or compose service'}, message: {type: string}}}
     Principal:
       type: object
@@ -472,7 +523,11 @@ components:
         global_admin: {type: boolean}
         csrf_token: {type: [string, 'null'], description: 'Cookie sessions only; send as X-CSRF-Token on mutations'}
         approver_for: {type: array, items: {type: string}, description: 'Namespace slugs whose approver_group the user is in (fallback for unassigned apps since M17)'}
-        approver_for_products: {type: array, items: {type: string}, description: 'M17: product slugs whose approver_group the user is in'}
+        approver_for_products: {type: array, items: {type: string}, description: 'M17: product slugs whose approver_group the user is in; M17c: products where the user is in the approver set (owner or group)'}
+        memberships: {type: array, description: M17c, items: {type: object, properties: {product: {type: string}, role: {$ref: '#/components/schemas/Role'}, via: {type: string, enum: [user, group, owner]}}}}
+        owner_of: {type: array, items: {type: string}, description: M17c}
+        pending_requests: {type: object, description: M17c, properties: {access: {type: array, items: {$ref: '#/components/schemas/AccessRequest'}}, grants: {type: array, items: {$ref: '#/components/schemas/AccessGrant'}}}}
+        approval_queue_count: {type: integer, description: M17c}
         namespaces: {type: array, items: {type: object, properties: {slug: {type: string}, role: {$ref: '#/components/schemas/Role'}}}}
         active_grants: {type: array, items: {$ref: '#/components/schemas/AccessGrant'}}
     Target:
@@ -584,7 +639,9 @@ components:
       description: Exactly one of manifests (kubernetes) or compose (docker), matching the stack runtime.
       properties:
         safety_profile: {$ref: '#/components/schemas/SafetyProfile'}
-        manifests: {type: string, description: 'Multi-document Kubernetes YAML (K8S-020)'}
+        manifests: {type: string, description: 'Multi-document Kubernetes YAML (K8S-020); __C8_HIDDEN__ tokens resolved from base_revision (RED-009)'}
+        base_revision: {type: integer, minimum: 1, description: 'M17e: revision whose values replace __C8_HIDDEN__ tokens'}
+        copy_from: {type: object, description: 'M17e: server-side copy of another stack''s revision (same product)', properties: {namespace: {type: string}, stack: {type: string}, revision: {type: integer}}}
         rollout_timeout_seconds: {type: integer, minimum: 30, maximum: 1800}
         digest_poll: {type: boolean, default: false, description: managed_rollout only}
         database_services: {type: array, items: {type: string}}
@@ -624,6 +681,7 @@ components:
         confirm_environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
         reason: {type: string}
         repull: {type: boolean, default: false, description: 'docker as_is only'}
+        plan: {type: string, description: 'M17e: deploy exactly this stored plan; 409 plan_stale if live state changed (PLN-005)'}
     ImageUpdateCreate:
       type: object
       required: [workload, container, image, reason, confirm_environment_tier]
@@ -668,6 +726,9 @@ components:
         finished_at: {type: [string, 'null'], format: date-time}
         error: {type: [string, 'null']}
         output: {type: [string, 'null']}
+        plan: {type: [string, 'null'], description: M17e}
+        steps: {type: array, items: {$ref: '#/components/schemas/DeploymentStep'}, description: 'M17e: ordered checklist (STP-*)'}
+        steps_summary: {type: [object, 'null'], description: M17e, properties: {current: {type: [string, 'null']}, first_failure: {type: [string, 'null']}}}
     DeploymentList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Deployment'}}, next_cursor: {type: [string, 'null']}}}
     AccessGrantCreate:
       type: object
@@ -684,6 +745,7 @@ components:
     AccessGrant:
       type: object
       properties:
+        fallback_required: {type: boolean, description: 'M17c: no approver other than the requester; global_admin decides'}
         product: {type: string, description: 'M17; legacy grants = unassigned'}
         environment: {type: [string, 'null'], description: M17}
         id: {type: string}
@@ -719,7 +781,7 @@ components:
         allowed_bind_prefixes: {type: array, items: {type: string}, description: 'Allowed hostPath / bind prefixes; empty = none'}
         allow_privileged: {type: boolean}
         allowed_products: {type: array, items: {type: string}, description: 'M17: products allowed to place apps in this namespace; empty = any'}
-    RoleBinding: {type: object, properties: {id: {type: string}, idp_group: {type: string}, namespace: {type: [string, 'null']}, product: {type: [string, 'null'], description: 'M17; at most one of namespace/product'}, role: {$ref: '#/components/schemas/Role'}}}
+    RoleBinding: {type: object, properties: {id: {type: string}, idp_group: {type: string}, namespace: {type: [string, 'null']}, product: {type: [string, 'null'], description: 'M17; at most one of namespace/product'}, user: {type: [string, 'null'], description: 'M17c: direct product membership (exactly one of idp_group/user)'}, role: {$ref: '#/components/schemas/Role'}}}
     RoleBindingCreate: {type: object, required: [idp_group, role], additionalProperties: false, properties: {idp_group: {type: string}, namespace: {type: [string, 'null']}, product: {type: [string, 'null'], description: M17}, role: {$ref: '#/components/schemas/Role'}}}
     Token: {type: object, description: 'From C8_TOKENS; hash never returned', properties: {id: {type: string}, name: {type: string}, owner_sub: {type: string}, owner_resolved: {type: boolean}, namespace: {type: [string, 'null']}, role: {$ref: '#/components/schemas/Role'}, expires_at: {type: string}, last_used_at: {type: [string, 'null']}, revoked_at: {type: [string, 'null']}}}
     AuditEvent:
@@ -738,7 +800,7 @@ components:
         outcome: {type: string, enum: [success, denied, failed]}
         details: {type: object, description: 'Prod-gated actions include grant_id or grant_bypass'}
         request_id: {type: [string, 'null']}
-    EventType: {type: string, enum: [stack.updated, stack.removed, revision.created, deployment.updated, access_grant.updated, audit.created, target.status, reset, session.ended, product.updated, product.removed, application.updated, environment.updated, migration.plan.created, migration.applied, migration.undone, discovery.updated, discovery.finding], description: 'product.* .. migration.* from M17/M17b; discovery.* from M19/M20'}
+    EventType: {type: string, enum: [stack.updated, stack.removed, revision.created, deployment.updated, deployment.step, access_grant.updated, audit.created, target.status, reset, session.ended, product.updated, product.removed, application.updated, environment.updated, product_access_request.updated, product_membership.updated, migration.plan.created, migration.applied, migration.undone, discovery.updated, discovery.finding], description: 'product.* .. migration.* from M17/M17b; discovery.* from M19/M20'}
     Event:
       type: object
       required: [type, at, data]
@@ -762,6 +824,8 @@ components:
             - {$ref: '#/components/schemas/MigrationResult'}
             - {$ref: '#/components/schemas/DiscoveredWorkload'}
             - {$ref: '#/components/schemas/Finding'}
+            - {$ref: '#/components/schemas/AccessRequest'}
+            - {$ref: '#/components/schemas/DeploymentStep'}
             - {type: object, description: 'stack.removed', required: [namespace, slug], properties: {namespace: {type: string}, slug: {type: string}}}
             - {type: object, description: 'reset / session.ended', required: [reason], properties: {reason: {type: string}}}
     Product:
@@ -776,9 +840,12 @@ components:
         approver_group: {type: [string, 'null'], description: 'null only for built-in unassigned'}
         tags: {type: array, items: {type: string}}
         builtin: {type: boolean}
+        member: {type: boolean, description: 'M17c: false = directory entry only (MEM-002)'}
+        my_role: {oneOf: [{$ref: '#/components/schemas/Role'}, {type: 'null'}], description: M17c}
+        owners: {type: array, items: {$ref: '#/components/schemas/User'}, description: 'M17c; display names only for directory entries'}
         counts: {type: object, properties: {applications: {type: integer}, stacks: {type: integer}, prod: {type: integer}, non_prod: {type: integer}, unhealthy: {type: integer}, open_findings: {type: integer}, active_grants: {type: integer}}}
-    ProductCreate: {type: object, required: [slug, name, approver_group], additionalProperties: false, properties: {slug: {$ref: '#/components/schemas/Slug'}, name: {type: string}, description: {type: string}, owner: {type: string}, links: {type: array, items: {type: object, properties: {label: {type: string}, url: {type: string, format: uri}}}}, approver_group: {type: string}, tags: {type: array, items: {type: string}, maxItems: 20}}}
-    ProductUpdate: {type: object, additionalProperties: false, properties: {name: {type: string}, description: {type: string}, owner: {type: string}, links: {type: array, items: {type: object, properties: {label: {type: string}, url: {type: string, format: uri}}}}, approver_group: {type: string, description: global_admin only}, tags: {type: array, items: {type: string}, maxItems: 20}}}
+    ProductCreate: {type: object, required: [slug, name], additionalProperties: false, description: 'M17c: approver_group optional; creator becomes first owner', properties: {slug: {$ref: '#/components/schemas/Slug'}, name: {type: string}, description: {type: string}, owner: {type: string}, links: {type: array, items: {type: object, properties: {label: {type: string}, url: {type: string, format: uri}}}}, approver_group: {type: string}, tags: {type: array, items: {type: string}, maxItems: 20}}}
+    ProductUpdate: {type: object, additionalProperties: false, properties: {name: {type: string}, description: {type: string}, owner: {type: string}, links: {type: array, items: {type: object, properties: {label: {type: string}, url: {type: string, format: uri}}}}, approver_group: {type: string, description: 'M17: global_admin only; M17c: owners'}, tags: {type: array, items: {type: string}, maxItems: 20}}}
     ProductList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/Product'}}, next_cursor: {type: [string, 'null']}}}
     Environment: {type: object, properties: {id: {type: string}, product: {type: string}, name: {$ref: '#/components/schemas/Slug'}, tier: {$ref: '#/components/schemas/EnvironmentTier'}, target: {type: string}, namespace: {type: string}, order: {type: integer}, effective_tier: {$ref: '#/components/schemas/EnvironmentTier'}}}
     EnvironmentCreate: {type: object, required: [name, tier, target, namespace], additionalProperties: false, properties: {name: {$ref: '#/components/schemas/Slug'}, tier: {$ref: '#/components/schemas/EnvironmentTier'}, target: {$ref: '#/components/schemas/Slug'}, namespace: {$ref: '#/components/schemas/Slug'}, order: {type: integer}, confirm_prod: {type: string, description: 'Product slug; required when tier=prod'}}}
@@ -918,5 +985,70 @@ components:
         requires_grant: {type: boolean}
         environment_tier: {$ref: '#/components/schemas/EnvironmentTier'}
         deployment: {type: [string, 'null']}
+        expires_at: {type: string, format: date-time}
+    User: {type: object, properties: {id: {type: string}, display_name: {type: string}, email: {type: [string, 'null']}}}
+    ProductMember: {type: object, properties: {user: {$ref: '#/components/schemas/User'}, role: {$ref: '#/components/schemas/Role'}, via: {type: string, enum: [user, group, owner]}, group: {type: [string, 'null']}}}
+    AccessRequest:
+      type: object
+      properties:
+        id: {type: string}
+        product: {type: string}
+        requester: {$ref: '#/components/schemas/User'}
+        reason: {type: string}
+        requested_role: {type: string, enum: [viewer, operator]}
+        status: {type: string, enum: [requested, approved, denied, cancelled]}
+        fallback_required: {type: boolean}
+        decided_by: {type: [string, 'null']}
+        decided_at: {type: [string, 'null'], format: date-time}
+        decision_note: {type: [string, 'null']}
+        granted_role: {type: [string, 'null']}
+        created_at: {type: string, format: date-time}
+    AccessRequestList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/AccessRequest'}}, next_cursor: {type: [string, 'null']}}}
+    DeploymentStep:
+      type: object
+      properties:
+        deployment: {type: string}
+        seq: {type: integer}
+        key: {type: string, description: 'e.g. accepted, access, approval, policy, ownership, dry_run, apply, apply:Deployment/web, image_pull, rollout, health, prune, done, rollback, rollback_result'}
+        parent: {type: [string, 'null']}
+        label: {type: string}
+        status: {type: string, enum: [pending, running, succeeded, failed, skipped]}
+        started_at: {type: [string, 'null'], format: date-time}
+        finished_at: {type: [string, 'null'], format: date-time}
+        detail: {type: object, description: 'Redacted before/after and counts'}
+        error_code: {type: [string, 'null']}
+        message: {type: [string, 'null']}
+        hint: {type: [string, 'null']}
+        docs_url: {type: [string, 'null']}
+        first_failure: {type: boolean}
+    PlanChange: {type: object, properties: {field: {type: string}, before: {type: [string, 'null']}, after: {type: [string, 'null']}, hidden: {type: boolean, description: 'true = value redacted; before/after omitted (RED-008)'}}}
+    DeployPlan:
+      type: object
+      properties:
+        id: {type: string}
+        stack: {type: string}
+        revision: {type: integer}
+        action: {type: string, enum: [apply, teardown]}
+        hash: {type: string}
+        objects:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: {type: string}
+              name: {type: string}
+              action: {type: string, enum: [create, update, unchanged, prune, delete, kept]}
+              images: {type: array, items: {type: object, properties: {container: {type: string}, from: {type: [string, 'null']}, to: {type: [string, 'null']}, from_digest: {type: [string, 'null']}, to_digest: {type: [string, 'null']}}}}
+              changes: {type: array, items: {$ref: '#/components/schemas/PlanChange'}}
+              restarts_pods: {type: [integer, 'null']}
+              diff: {type: string, description: 'Redacted unified diff'}
+        policy_result: {$ref: '#/components/schemas/PolicyResult'}
+        conflicts: {type: array, items: {type: object, properties: {object: {type: string}, managers: {type: array, items: {type: string}}, code: {type: string}}}}
+        impact: {type: object, properties: {pods_restarted: {type: integer}, created: {type: integer}, updated: {type: integer}, pruned: {type: integer}}}
+        requires_grant: {type: boolean}
+        has_grant: {type: boolean}
+        requires_approval: {type: boolean}
+        warnings: {type: array, items: {type: string}}
+        created_by: {type: string}
         expires_at: {type: string, format: date-time}
     AuditList: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/AuditEvent'}}, next_cursor: {type: [string, 'null']}}}

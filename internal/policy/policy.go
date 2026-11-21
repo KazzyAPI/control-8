@@ -18,6 +18,7 @@ type Rules struct {
 	AllowedSafetyProfiles []string `json:"allowed_safety_profiles"`
 	AllowedBindPrefixes   []string `json:"allowed_bind_prefixes"`
 	AllowPrivileged       bool     `json:"allow_privileged"`
+	AllowedProducts       []string `json:"allowed_products"` // POL-R15: products that may place apps here; [] = any
 }
 
 type Violation struct {
@@ -53,7 +54,7 @@ func nn(s []string) []string {
 // Norm makes nil lists serialise as [].
 func (r Rules) Norm() Rules {
 	r.AllowedRegistries, r.AllowedK8sNamespaces, r.RequiredLabels = nn(r.AllowedRegistries), nn(r.AllowedK8sNamespaces), nn(r.RequiredLabels)
-	r.AllowedSafetyProfiles, r.AllowedBindPrefixes = nn(r.AllowedSafetyProfiles), nn(r.AllowedBindPrefixes)
+	r.AllowedSafetyProfiles, r.AllowedBindPrefixes, r.AllowedProducts = nn(r.AllowedSafetyProfiles), nn(r.AllowedBindPrefixes), nn(r.AllowedProducts)
 	return r
 }
 
@@ -116,7 +117,23 @@ func Merge(g Rules, ns *Rules) Rules {
 		e.AllowedBindPrefixes = ns.AllowedBindPrefixes // Validate guarantees they are within global
 	}
 	e.AllowPrivileged = g.AllowPrivileged && ns.AllowPrivileged
+	if len(ns.AllowedProducts) > 0 { // intersection; "-" is not a valid slug, so an empty intersection allows nothing
+		e.AllowedProducts = nil
+		for _, p := range ns.AllowedProducts {
+			if len(g.AllowedProducts) == 0 || slices.Contains(g.AllowedProducts, p) {
+				e.AllowedProducts = append(e.AllowedProducts, p)
+			}
+		}
+		if len(e.AllowedProducts) == 0 {
+			e.AllowedProducts = []string{"-"}
+		}
+	}
 	return e.Norm()
+}
+
+// ProductAllowed is POL-R15: whether an application of product may be placed in a namespace with these effective rules.
+func (r Rules) ProductAllowed(product string) bool {
+	return len(r.AllowedProducts) == 0 || slices.Contains(r.AllowedProducts, product)
 }
 
 // Validate rejects a namespace rules document that widens the global one (registries, bind prefixes).

@@ -31,10 +31,13 @@ func (s *server) visible(p *auth.Principal, e events.Event) bool {
 		}
 	case "target.status":
 		return s.anyRole(p)
-	case "access_grant.updated":
-		return p.ID == e.Requester || authz.Effective(s.db, p, "") == 4 || slices.Contains(s.approverFor(p.Groups), e.Namespace)
+	case "access_grant.updated": // PRD-024: requester, resolved approver group, product admins, global_admin
+		return p.ID == e.Requester || authz.Effective(s.db, p, "") == 4 || e.Group != "" && slices.Contains(p.Groups, e.Group) ||
+			e.Product != "" && authz.EffectiveIn(s.db, p, "", e.Product) >= authz.Rank("admin")
+	case "product.updated", "product.removed", "application.updated", "environment.updated":
+		return s.canSeeProduct(p, e.Product)
 	}
-	return authz.Effective(s.db, p, e.Namespace) >= 1
+	return authz.EffectiveIn(s.db, p, e.Namespace, e.Product) >= 1 // stack/revision/deployment: namespace or product role (PRD-011)
 }
 
 // anyRole: a role in at least one namespace (a binding with no namespace counts for every one).
@@ -53,7 +56,21 @@ func (s *server) anyRole(p *auth.Principal) bool {
 		slugs = append(slugs, n)
 	}
 	rows.Close()
-	return slices.ContainsFunc(slugs, func(n string) bool { return authz.Effective(s.db, p, n) > 0 })
+	if slices.ContainsFunc(slugs, func(n string) bool { return authz.Effective(s.db, p, n) > 0 }) {
+		return true
+	}
+	rows, err = s.db.Query(`SELECT DISTINCT product_id FROM role_binding WHERE product_id IS NOT NULL`)
+	if err != nil {
+		return false
+	}
+	var prods []string
+	for rows.Next() {
+		var n string
+		rows.Scan(&n)
+		prods = append(prods, n)
+	}
+	rows.Close()
+	return slices.ContainsFunc(prods, func(n string) bool { return authz.EffectiveIn(s.db, p, "", n) > 0 })
 }
 
 func (s *server) acquire(id string) bool {

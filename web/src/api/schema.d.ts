@@ -317,6 +317,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/namespaces/{ns}/stacks/{stack}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["ns"];
+                stack: components["parameters"]["stack"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Dry run (PLN-001): never writes to the cluster; rate limited; prod without grant per C8_DRYRUN_PROD_WITHOUT_GRANT (GRT-032). */
+        post: operations["createDeployPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/deploy-plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDeployPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/deployments/{id}": {
         parameters: {
             query?: never;
@@ -751,6 +789,184 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getProductOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        get: operations["listProductMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/members/{user}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setProductMember"];
+        post?: never;
+        delete: operations["removeProductMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        get: operations["listProductOwners"];
+        put?: never;
+        post: operations["addProductOwner"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/owners/{user}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeProductOwner"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/{product}/access-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        get: operations["listProductAccessRequests"];
+        put?: never;
+        post: operations["requestProductAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access-requests/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMyAccessRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["approveAccessRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access-requests/{id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["denyAccessRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/access-requests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancelAccessRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchUsers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1230,7 +1446,23 @@ export interface components {
             scope?: {
                 target?: string;
                 namespace?: string;
+                /** @description M17 */
+                product?: string;
+                /** @description M17 */
+                environment?: string | null;
             };
+            /** @description grant_required (M17c, GRT-030) */
+            approvers?: {
+                owners?: string[];
+                group?: string | null;
+            };
+            /** @description grant_required: caller's requested/approved grant, if any */
+            pending_grant?: {
+                id?: string;
+                status?: string;
+            } | null;
+            /** @description grant_required / not_a_member: where to request access */
+            request_url?: string | null;
         };
         Violation: {
             rule: string;
@@ -1248,8 +1480,24 @@ export interface components {
             csrf_token?: string | null;
             /** @description Namespace slugs whose approver_group the user is in (fallback for unassigned apps since M17) */
             approver_for?: string[];
-            /** @description M17: product slugs whose approver_group the user is in */
+            /** @description M17: product slugs whose approver_group the user is in; M17c: products where the user is in the approver set (owner or group) */
             approver_for_products?: string[];
+            /** @description M17c */
+            memberships?: {
+                product?: string;
+                role?: components["schemas"]["Role"];
+                /** @enum {string} */
+                via?: "user" | "group" | "owner";
+            }[];
+            /** @description M17c */
+            owner_of?: string[];
+            /** @description M17c */
+            pending_requests?: {
+                access?: components["schemas"]["AccessRequest"][];
+                grants?: components["schemas"]["AccessGrant"][];
+            };
+            /** @description M17c */
+            approval_queue_count?: number;
             namespaces?: {
                 slug?: string;
                 role?: components["schemas"]["Role"];
@@ -1488,8 +1736,16 @@ export interface components {
         /** @description Exactly one of manifests (kubernetes) or compose (docker), matching the stack runtime. */
         RevisionCreate: {
             safety_profile: components["schemas"]["SafetyProfile"];
-            /** @description Multi-document Kubernetes YAML (K8S-020) */
+            /** @description Multi-document Kubernetes YAML (K8S-020); __C8_HIDDEN__ tokens resolved from base_revision (RED-009) */
             manifests?: string;
+            /** @description M17e: revision whose values replace __C8_HIDDEN__ tokens */
+            base_revision?: number;
+            /** @description M17e: server-side copy of another stack's revision (same product) */
+            copy_from?: {
+                namespace?: string;
+                stack?: string;
+                revision?: number;
+            };
             rollout_timeout_seconds?: number;
             /**
              * @description managed_rollout only
@@ -1566,6 +1822,8 @@ export interface components {
              * @default false
              */
             repull: boolean;
+            /** @description M17e: deploy exactly this stored plan; 409 plan_stale if live state changed (PLN-005) */
+            plan?: string;
         };
         ImageUpdateCreate: {
             /** @description Kind/name, e.g. Deployment/web */
@@ -1627,6 +1885,15 @@ export interface components {
             finished_at?: string | null;
             error?: string | null;
             output?: string | null;
+            /** @description M17e */
+            plan?: string | null;
+            /** @description M17e: ordered checklist (STP-*) */
+            steps?: components["schemas"]["DeploymentStep"][];
+            /** @description M17e */
+            steps_summary?: {
+                current?: string | null;
+                first_failure?: string | null;
+            } | null;
         };
         DeploymentList: {
             items?: components["schemas"]["Deployment"][];
@@ -1648,6 +1915,8 @@ export interface components {
             starts_at?: string;
         };
         AccessGrant: {
+            /** @description M17c: no approver other than the requester; global_admin decides */
+            fallback_required?: boolean;
             /** @description M17; legacy grants = unassigned */
             product?: string;
             /** @description M17 */
@@ -1710,6 +1979,8 @@ export interface components {
             namespace?: string | null;
             /** @description M17; at most one of namespace/product */
             product?: string | null;
+            /** @description M17c: direct product membership (exactly one of idp_group/user) */
+            user?: string | null;
             role?: components["schemas"]["Role"];
         };
         RoleBindingCreate: {
@@ -1754,14 +2025,14 @@ export interface components {
          * @description product.* .. migration.* from M17/M17b; discovery.* from M19/M20
          * @enum {string}
          */
-        EventType: "stack.updated" | "stack.removed" | "revision.created" | "deployment.updated" | "access_grant.updated" | "audit.created" | "target.status" | "reset" | "session.ended" | "product.updated" | "product.removed" | "application.updated" | "environment.updated" | "migration.plan.created" | "migration.applied" | "migration.undone" | "discovery.updated" | "discovery.finding";
+        EventType: "stack.updated" | "stack.removed" | "revision.created" | "deployment.updated" | "deployment.step" | "access_grant.updated" | "audit.created" | "target.status" | "reset" | "session.ended" | "product.updated" | "product.removed" | "application.updated" | "environment.updated" | "product_access_request.updated" | "product_membership.updated" | "migration.plan.created" | "migration.applied" | "migration.undone" | "discovery.updated" | "discovery.finding";
         Event: {
             type: components["schemas"]["EventType"];
             /** Format: date-time */
             at: string;
             namespace?: string | null;
             /** @description Payload by type (10 catalogue) */
-            data: components["schemas"]["Stack"] | components["schemas"]["Revision"] | components["schemas"]["Deployment"] | components["schemas"]["AccessGrant"] | components["schemas"]["AuditEvent"] | components["schemas"]["Target"] | components["schemas"]["Product"] | components["schemas"]["Asset"] | components["schemas"]["Environment"] | components["schemas"]["MigrationPlan"] | components["schemas"]["MigrationResult"] | components["schemas"]["DiscoveredWorkload"] | components["schemas"]["Finding"] | {
+            data: components["schemas"]["Stack"] | components["schemas"]["Revision"] | components["schemas"]["Deployment"] | components["schemas"]["AccessGrant"] | components["schemas"]["AuditEvent"] | components["schemas"]["Target"] | components["schemas"]["Product"] | components["schemas"]["Asset"] | components["schemas"]["Environment"] | components["schemas"]["MigrationPlan"] | components["schemas"]["MigrationResult"] | components["schemas"]["DiscoveredWorkload"] | components["schemas"]["Finding"] | components["schemas"]["AccessRequest"] | components["schemas"]["DeploymentStep"] | {
                 namespace: string;
                 slug: string;
             } | {
@@ -1783,6 +2054,12 @@ export interface components {
             approver_group?: string | null;
             tags?: string[];
             builtin?: boolean;
+            /** @description M17c: false = directory entry only (MEM-002) */
+            member?: boolean;
+            /** @description M17c */
+            my_role?: components["schemas"]["Role"] | null;
+            /** @description M17c; display names only for directory entries */
+            owners?: components["schemas"]["User"][];
             counts?: {
                 applications?: number;
                 stacks?: number;
@@ -1793,6 +2070,7 @@ export interface components {
                 active_grants?: number;
             };
         };
+        /** @description M17c: approver_group optional; creator becomes first owner */
         ProductCreate: {
             slug: components["schemas"]["Slug"];
             name: string;
@@ -1803,7 +2081,7 @@ export interface components {
                 /** Format: uri */
                 url?: string;
             }[];
-            approver_group: string;
+            approver_group?: string;
             tags?: string[];
         };
         ProductUpdate: {
@@ -1815,7 +2093,7 @@ export interface components {
                 /** Format: uri */
                 url?: string;
             }[];
-            /** @description global_admin only */
+            /** @description M17: global_admin only; M17c: owners */
             approver_group?: string;
             tags?: string[];
         };
@@ -2100,6 +2378,112 @@ export interface components {
             /** Format: date-time */
             expires_at?: string;
         };
+        User: {
+            id?: string;
+            display_name?: string;
+            email?: string | null;
+        };
+        ProductMember: {
+            user?: components["schemas"]["User"];
+            role?: components["schemas"]["Role"];
+            /** @enum {string} */
+            via?: "user" | "group" | "owner";
+            group?: string | null;
+        };
+        AccessRequest: {
+            id?: string;
+            product?: string;
+            requester?: components["schemas"]["User"];
+            reason?: string;
+            /** @enum {string} */
+            requested_role?: "viewer" | "operator";
+            /** @enum {string} */
+            status?: "requested" | "approved" | "denied" | "cancelled";
+            fallback_required?: boolean;
+            decided_by?: string | null;
+            /** Format: date-time */
+            decided_at?: string | null;
+            decision_note?: string | null;
+            granted_role?: string | null;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        AccessRequestList: {
+            items?: components["schemas"]["AccessRequest"][];
+            next_cursor?: string | null;
+        };
+        DeploymentStep: {
+            deployment?: string;
+            seq?: number;
+            /** @description e.g. accepted, access, approval, policy, ownership, dry_run, apply, apply:Deployment/web, image_pull, rollout, health, prune, done, rollback, rollback_result */
+            key?: string;
+            parent?: string | null;
+            label?: string;
+            /** @enum {string} */
+            status?: "pending" | "running" | "succeeded" | "failed" | "skipped";
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
+            /** @description Redacted before/after and counts */
+            detail?: Record<string, never>;
+            error_code?: string | null;
+            message?: string | null;
+            hint?: string | null;
+            docs_url?: string | null;
+            first_failure?: boolean;
+        };
+        PlanChange: {
+            field?: string;
+            before?: string | null;
+            after?: string | null;
+            /** @description true = value redacted; before/after omitted (RED-008) */
+            hidden?: boolean;
+        };
+        DeployPlan: {
+            id?: string;
+            stack?: string;
+            revision?: number;
+            /** @enum {string} */
+            action?: "apply" | "teardown";
+            hash?: string;
+            objects?: {
+                kind?: string;
+                name?: string;
+                /** @enum {string} */
+                action?: "create" | "update" | "unchanged" | "prune" | "delete" | "kept";
+                images?: {
+                    container?: string;
+                    from?: string | null;
+                    to?: string | null;
+                    from_digest?: string | null;
+                    to_digest?: string | null;
+                }[];
+                changes?: components["schemas"]["PlanChange"][];
+                restarts_pods?: number | null;
+                /** @description Redacted unified diff */
+                diff?: string;
+            }[];
+            policy_result?: components["schemas"]["PolicyResult"];
+            conflicts?: {
+                object?: string;
+                managers?: string[];
+                code?: string;
+            }[];
+            impact?: {
+                pods_restarted?: number;
+                created?: number;
+                updated?: number;
+                pruned?: number;
+            };
+            requires_grant?: boolean;
+            has_grant?: boolean;
+            requires_approval?: boolean;
+            warnings?: string[];
+            created_by?: string;
+            /** Format: date-time */
+            expires_at?: string;
+        };
         AuditList: {
             items?: components["schemas"]["AuditEvent"][];
             next_cursor?: string | null;
@@ -2181,7 +2565,10 @@ export interface operations {
     };
     getInventory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description M17c/CTX-004: filter to one product */
+                product?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2806,6 +3193,67 @@ export interface operations {
             };
         };
     };
+    createDeployPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["ns"];
+                stack: components["parameters"]["stack"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    revision: number;
+                    /**
+                     * @default apply
+                     * @enum {string}
+                     */
+                    action?: "apply" | "teardown";
+                };
+            };
+        };
+        responses: {
+            /** @description Plan */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployPlan"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getDeployPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployPlan"];
+                };
+            };
+            404: components["responses"]["Problem"];
+        };
+    };
     getDeployment: {
         parameters: {
             query?: never;
@@ -2906,6 +3354,8 @@ export interface operations {
     listAccessGrants: {
         parameters: {
             query?: {
+                /** @description M17c/CTX-004: filter to one product */
+                product?: string;
                 status?: components["schemas"]["GrantStatus"];
                 namespace?: string;
                 target?: string;
@@ -3297,6 +3747,8 @@ export interface operations {
     queryAudit: {
         parameters: {
             query?: {
+                /** @description M17c/CTX-004: filter to one product */
+                product?: string;
                 namespace?: string;
                 action?: string;
                 target_id?: string;
@@ -3742,6 +4194,345 @@ export interface operations {
                     "application/json": components["schemas"]["ProductOverview"];
                 };
             };
+        };
+    };
+    listProductMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["ProductMember"][];
+                    };
+                };
+            };
+        };
+    };
+    setProductMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    role: components["schemas"]["Role"];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductMember"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    removeProductMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    listProductOwners: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["User"][];
+                    };
+                };
+            };
+        };
+    };
+    addProductOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    user: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Added */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    removeProductOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listProductAccessRequests: {
+        parameters: {
+            query?: {
+                status?: "requested" | "approved" | "denied" | "cancelled";
+            };
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestList"];
+                };
+            };
+        };
+    };
+    requestProductAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product: components["parameters"]["product"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                    /**
+                     * @default operator
+                     * @enum {string}
+                     */
+                    requested_role?: "viewer" | "operator";
+                };
+            };
+        };
+        responses: {
+            /** @description Requested */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            409: components["responses"]["Problem"];
+        };
+    };
+    listMyAccessRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestList"];
+                };
+            };
+        };
+    };
+    approveAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    granted_role?: "viewer" | "operator";
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Approved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    denyAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Denied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    cancelAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            403: components["responses"]["Problem"];
+        };
+    };
+    searchUsers: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["User"][];
+                    };
+                };
+            };
+            403: components["responses"]["Problem"];
         };
     };
     dryRunMigration: {

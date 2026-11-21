@@ -227,7 +227,7 @@ func TestAUTH041_FilterMatrix(t *testing.T) {
 		{"audit a", events.Event{Type: "audit.created", Namespace: "a"}, [4]bool{true, false, true, false}},
 		{"audit global", events.Event{Type: "audit.created"}, [4]bool{false, false, true, false}},
 		{"target", events.Event{Type: "target.status"}, [4]bool{true, false, true, false}},
-		{"grant b by u2", events.Event{Type: "access_grant.updated", Namespace: "b", Requester: "u2"}, [4]bool{false, true, true, true}},
+		{"grant b by u2", events.Event{Type: "access_grant.updated", Namespace: "b", Requester: "u2", Group: "b-appr"}, [4]bool{false, true, true, true}},
 	}
 	for _, c := range cases {
 		for i, pr := range []*auth.Principal{viewer, other, admin, appr} {

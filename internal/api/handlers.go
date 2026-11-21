@@ -33,6 +33,7 @@ func (s *server) routes(mux *http.ServeMux) (patterns []string) {
 	s.stackRoutes(reg)
 	s.depRoutes(reg)
 	s.grantRoutes(reg)
+	s.productRoutes(reg)
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) { problem(w, 404, "not_found", "no such route") })
 	return
 }
@@ -62,7 +63,7 @@ func (s *server) me(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	}
 	writeJSON(w, 200, map[string]any{"id": p.ID, "display_name": p.Display, "auth_method": p.AuthMethod,
 		"global_admin": authz.Effective(s.db, p, "") == 4, "csrf_token": csrf,
-		"approver_for": s.approverFor(p.Groups), "namespaces": ns, "active_grants": s.activeGrants(p)})
+		"approver_for": s.approverFor(p.Groups), "approver_for_products": s.approverForProducts(p.Groups), "namespaces": ns, "active_grants": s.activeGrants(p)})
 }
 
 // tokens lists configured tokens: own (same owner), or all for global_admin. Never the hash (AUTH-033).
@@ -108,6 +109,7 @@ type binding struct {
 	ID        string  `json:"id"`
 	IdpGroup  string  `json:"idp_group"`
 	Namespace *string `json:"namespace"`
+	Product   *string `json:"product"` // PRD-010: at most one of namespace/product
 	Role      string  `json:"role"`
 }
 
@@ -129,12 +131,12 @@ func (s *server) listBindings(w http.ResponseWriter, r *http.Request, p *auth.Pr
 	if !s.adminOnly(w, r, p, "role_binding.list") {
 		return
 	}
-	rows, _ := s.db.Query(`SELECT id,idp_group,namespace_id,role FROM role_binding ORDER BY id`)
+	rows, _ := s.db.Query(`SELECT b.id,b.idp_group,b.namespace_id,pr.slug,b.role FROM role_binding b LEFT JOIN product pr ON pr.id=b.product_id ORDER BY b.id`)
 	defer rows.Close()
 	items := []binding{}
 	for rows.Next() {
 		var b binding
-		rows.Scan(&b.ID, &b.IdpGroup, &b.Namespace, &b.Role)
+		rows.Scan(&b.ID, &b.IdpGroup, &b.Namespace, &b.Product, &b.Role)
 		items = append(items, b)
 	}
 	writeJSON(w, 200, map[string]any{"items": items})
@@ -155,16 +157,28 @@ func (s *server) createBinding(w http.ResponseWriter, r *http.Request, p *auth.P
 	case b.Namespace != nil && !slugRe.MatchString(*b.Namespace):
 		problem(w, 400, "invalid_body", "namespace must be a slug or null")
 		return
-	case b.Role == "global_admin" && b.Namespace != nil:
-		problem(w, 400, "invalid_body", "global_admin bindings must have a null namespace")
+	case b.Role == "global_admin" && (b.Namespace != nil || b.Product != nil):
+		problem(w, 400, "invalid_body", "global_admin bindings must have a null namespace and product")
+		return
+	case b.Namespace != nil && b.Product != nil:
+		problem(w, 400, "invalid_body", "a binding has at most one of namespace and product")
 		return
 	}
+	var prodID any
+	if b.Product != nil {
+		var id string
+		if s.db.QueryRow(`SELECT id FROM product WHERE slug=?`, *b.Product).Scan(&id) != nil {
+			problem(w, 400, "invalid_body", "no such product")
+			return
+		}
+		prodID = id
+	}
 	b.ID = auth.NewID("rb")
-	if _, err := s.db.Exec(`INSERT INTO role_binding(id,idp_group,namespace_id,role) VALUES(?,?,?,?)`, b.ID, b.IdpGroup, b.Namespace, b.Role); err != nil {
+	if _, err := s.db.Exec(`INSERT INTO role_binding(id,idp_group,namespace_id,product_id,role) VALUES(?,?,?,?,?)`, b.ID, b.IdpGroup, b.Namespace, prodID, b.Role); err != nil {
 		problem(w, 500, "internal", "insert failed")
 		return
 	}
-	s.audit(r, p, "role_binding.create", "role_binding", b.ID, "success", map[string]any{"idp_group": b.IdpGroup, "role": b.Role, "namespace": b.Namespace})
+	s.audit(r, p, "role_binding.create", "role_binding", b.ID, "success", map[string]any{"idp_group": b.IdpGroup, "role": b.Role, "namespace": b.Namespace, "product": b.Product})
 	writeJSON(w, 201, b)
 }
 

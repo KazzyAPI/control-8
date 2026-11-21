@@ -177,7 +177,7 @@ func newDB(t *testing.T, in Input) *Engine {
 	for _, q := range []string{
 		`INSERT INTO target(id,name,kind,environment_tier) VALUES('tgt_1','home','kubernetes','non-prod')`,
 		`INSERT INTO namespace(id,slug,display_name,environment_tier,created_at,updated_at) VALUES('ns_1','shop','S','non-prod','t','t')`,
-		`INSERT INTO asset(id,namespace_id,slug,name,managed_by,created_at,updated_at) VALUES('ast_1','ns_1','web','Web','control8','t','t')`,
+		`INSERT INTO asset(id,product_id,home_namespace_id,slug,name,managed_by,created_at,updated_at) VALUES('ast_1','prd_unassigned','ns_1','web','Web','control8','t','t')`,
 		`INSERT INTO stack(id,namespace_id,asset_id,target_id,slug,runtime,k8s_namespace,state,desired_revision,created_at,updated_at) VALUES('stk_1','ns_1','ast_1','tgt_1','web','kubernetes','shop','active',2,'t','t')`,
 	} {
 		if _, err := db.Exec(q); err != nil {

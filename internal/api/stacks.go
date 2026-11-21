@@ -45,19 +45,23 @@ type stackRec struct {
 	Frozen                                                            bool
 	Drift, Health, Services                                           string
 	Observed                                                          *string
+	ProdID, Product                                                   string  // owning product (id, slug) via the application (PRD-011)
+	Env, EnvID                                                        *string // environment name/id; nil for legacy stacks (PRD-044)
 }
 
 const stackSel = `SELECT st.id,n.id,n.slug,a.slug,st.target_id,COALESCE(t.name,''),st.slug,st.runtime,st.state,
-	CASE WHEN n.environment_tier='prod' OR t.environment_tier='prod' THEN 'prod' ELSE 'non-prod' END,
+	CASE WHEN n.environment_tier='prod' OR t.environment_tier='prod' OR e.tier='prod' THEN 'prod' ELSE 'non-prod' END,
 	st.k8s_namespace,st.safety_profile,st.digest_status,st.desired_revision,st.rollout_frozen,st.drift,
 	st.health,st.observed_at,COALESCE((SELECT json_group_array(json(j)) FROM (SELECT json_object('name',name,'kind',kind,'state',state,'health',health,
 	'desired_replicas',desired_replicas,'ready_replicas',ready_replicas,'image_ref',image_ref,'image_id',image_id,
-	'is_database',json(CASE WHEN is_database THEN 'true' ELSE 'false' END),'containers',json(containers)) j FROM service WHERE stack_id=st.id ORDER BY name)),'[]')
-	FROM stack st JOIN namespace n ON n.id=st.namespace_id JOIN asset a ON a.id=st.asset_id LEFT JOIN target t ON t.id=st.target_id `
+	'is_database',json(CASE WHEN is_database THEN 'true' ELSE 'false' END),'containers',json(containers)) j FROM service WHERE stack_id=st.id ORDER BY name)),'[]'),
+	a.product_id,p.slug,e.name,st.environment_id
+	FROM stack st JOIN namespace n ON n.id=st.namespace_id JOIN asset a ON a.id=st.asset_id JOIN product p ON p.id=a.product_id
+	LEFT JOIN target t ON t.id=st.target_id LEFT JOIN environment e ON e.id=st.environment_id `
 
 func scanStack(row interface{ Scan(...any) error }) (x stackRec, err error) {
 	err = row.Scan(&x.ID, &x.NSID, &x.NS, &x.Asset, &x.TargetID, &x.Target, &x.Slug, &x.Runtime, &x.State, &x.Tier,
-		&x.K8sNS, &x.Profile, &x.Digest, &x.Desired, &x.Frozen, &x.Drift, &x.Health, &x.Observed, &x.Services)
+		&x.K8sNS, &x.Profile, &x.Digest, &x.Desired, &x.Frozen, &x.Drift, &x.Health, &x.Observed, &x.Services, &x.ProdID, &x.Product, &x.Env, &x.EnvID)
 	return
 }
 
@@ -71,21 +75,34 @@ func (x stackRec) JSON() map[string]any {
 	if x.Digest != nil {
 		digest = json.RawMessage(*x.Digest)
 	}
-	return map[string]any{"id": x.ID, "namespace": x.NS, "slug": x.Slug, "asset": x.Asset, "target": x.Target, "runtime": x.Runtime,
+	return map[string]any{"id": x.ID, "namespace": x.NS, "slug": x.Slug, "asset": x.Asset, "product": x.Product, "application": x.Asset, "environment": x.Env, "target": x.Target, "runtime": x.Runtime,
 		"environment_tier": x.Tier, "k8s_namespace": x.K8sNS, "state": x.State, "safety_profile": x.Profile, "desired_revision": x.Desired,
 		"health": health, "rollout_frozen": x.Frozen, "drift": json.RawMessage(x.Drift), "digest_status": digest, "services": json.RawMessage(x.Services), "observed_at": x.Observed}
 }
 
 func (s *server) publishStack(x stackRec) {
-	s.publish(events.Event{Type: "stack.updated", At: s.now(), Namespace: x.NS, Data: x.JSON()})
+	s.publish(events.Event{Type: "stack.updated", At: s.now(), Namespace: x.NS, Product: x.ProdID, Data: x.JSON()})
 }
 
+// loadStack authorizes with the effective role on the stack (AUTH-024: global, namespace or product binding,
+// highest wins; 404 if none, 403 if too low; denials audited) and loads it.
 func (s *server) loadStack(w http.ResponseWriter, r *http.Request, p *auth.Principal, min, action string) (stackRec, bool) {
-	n, ok := s.loadNS(w, r, p, min, action)
-	if !ok {
+	slug := r.PathValue("ns")
+	x, err := scanStack(s.db.QueryRow(stackSel+`WHERE n.slug=? AND st.slug=?`, slug, r.PathValue("stack")))
+	var role int
+	if err != nil {
+		role = authz.Effective(s.db, p, slug)
+	} else {
+		role = authz.EffectiveIn(s.db, p, x.NS, x.ProdID)
+	}
+	if role < authz.Rank(min) {
+		e := authz.ErrForbidden
+		if role == 0 {
+			e = authz.ErrNotFound
+		}
+		s.denyNS(w, r, p, slug, action, e)
 		return stackRec{}, false
 	}
-	x, err := scanStack(s.db.QueryRow(stackSel+`WHERE st.namespace_id=? AND st.slug=?`, n.ID, r.PathValue("stack")))
 	if err != nil {
 		problem(w, 404, "not_found", "not found")
 		return x, false
@@ -93,29 +110,49 @@ func (s *server) loadStack(w http.ResponseWriter, r *http.Request, p *auth.Princ
 	return x, true
 }
 
+// requireStack is authz.Require on a loaded stack (namespace or product role, AUTH-024).
+func (s *server) requireStack(p *auth.Principal, x stackRec, min string) error {
+	return authz.RequireIn(s.db, p, x.NS, x.ProdID, min)
+}
+
 func (s *server) listStacks(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
-	n, ok := s.loadNS(w, r, p, "viewer", "stack.list")
-	if !ok {
+	slug := r.PathValue("ns")
+	var nsID string
+	if s.db.QueryRow(`SELECT id FROM namespace WHERE slug=?`, slug).Scan(&nsID) != nil {
+		s.denyNS(w, r, p, slug, "stack.list", authz.ErrNotFound)
 		return
 	}
 	limit, after, ok := page(w, r)
 	if !ok {
 		return
 	}
-	rows, err := s.db.Query(stackSel+`WHERE st.namespace_id=? AND st.slug>? AND st.state!='removed' ORDER BY st.slug LIMIT ?`, n.ID, after, limit+1)
+	rows, err := s.db.Query(stackSel+`WHERE st.namespace_id=? AND st.slug>? AND st.state!='removed' ORDER BY st.slug`, nsID, after)
 	if err != nil {
 		problem(w, 500, "internal", "query failed")
 		return
 	}
-	defer rows.Close()
-	items, next := []map[string]any{}, (*string)(nil)
+	var all []stackRec
 	for rows.Next() {
 		x, _ := scanStack(rows)
+		all = append(all, x)
+	}
+	rows.Close()
+	// PRD-014: a namespace role shows every stack, a product role only that product's stacks.
+	nsRole := authz.Effective(s.db, p, slug) > 0
+	items, next := []map[string]any{}, (*string)(nil)
+	for _, x := range all {
+		if !nsRole && authz.EffectiveIn(s.db, p, x.NS, x.ProdID) == 0 {
+			continue
+		}
 		if len(items) == limit {
 			next = cursor(items[limit-1]["slug"].(string))
 			break
 		}
 		items = append(items, x.JSON())
+	}
+	if !nsRole && len(items) == 0 {
+		s.denyNS(w, r, p, slug, "stack.list", authz.ErrNotFound)
+		return
 	}
 	writeJSON(w, 200, map[string]any{"items": items, "next_cursor": next})
 }
@@ -151,7 +188,7 @@ func (s *server) inventory(w http.ResponseWriter, r *http.Request, p *auth.Princ
 	rows.Close()
 	items, next := []map[string]any{}, (*string)(nil)
 	for _, x := range all {
-		if authz.Effective(s.db, p, x.NS) == 0 {
+		if authz.EffectiveIn(s.db, p, x.NS, x.ProdID) == 0 {
 			continue
 		}
 		if len(items) == limit {
@@ -163,12 +200,14 @@ func (s *server) inventory(w http.ResponseWriter, r *http.Request, p *auth.Princ
 	writeJSON(w, 200, map[string]any{"items": items, "next_cursor": next})
 }
 
+// createStack is the namespaced create (PRD-044): only for `unassigned` applications; a product application is
+// placed through its environment (POST /products/{p}/applications/{app}/stacks).
 func (s *server) createStack(w http.ResponseWriter, r *http.Request, p *auth.Principal) {
 	n, ok := s.loadNS(w, r, p, "operator", "stack.create")
 	if !ok {
 		return
 	}
-	var in struct{ Slug, Asset, Target, Runtime string }
+	var in struct{ Slug, Asset, Target, Runtime, Product string }
 	if !decode(w, r, &in) {
 		return
 	}
@@ -176,35 +215,43 @@ func (s *server) createStack(w http.ResponseWriter, r *http.Request, p *auth.Pri
 		problem(w, 400, "invalid_body", "slug, asset and target are required slugs")
 		return
 	}
-	var assetID, managedBy, tid, kind string
-	if s.db.QueryRow(`SELECT id,managed_by FROM asset WHERE namespace_id=? AND slug=?`, n.ID, in.Asset).Scan(&assetID, &managedBy) != nil {
-		problem(w, 400, "unknown_asset", "no such asset in this namespace")
+	rows, err := s.db.Query(`SELECT `+assetCols+assetFrom+`WHERE a.slug=? AND (?='' OR p.slug=?)`, in.Asset, in.Product, in.Product)
+	if err != nil {
+		problem(w, 500, "internal", "query failed")
 		return
 	}
+	var cands []assetRow
+	for rows.Next() {
+		a, _ := scanAsset(rows)
+		cands = append(cands, a)
+	}
+	rows.Close()
+	cands = slices.DeleteFunc(cands, func(a assetRow) bool { return !s.canSeeApp(p, a) })
+	switch {
+	case len(cands) == 0:
+		problem(w, 400, "unknown_asset", "no such asset")
+		return
+	case len(cands) > 1:
+		problem(w, 400, "asset_ambiguous", "several applications share this slug; pass product")
+		return
+	case cands[0].Product != "unassigned":
+		problem(w, 400, "environment_required", "place a product application with POST /products/{product}/applications/{app}/stacks")
+		return
+	}
+	a := cands[0]
+	var tid, kind string
 	if s.db.QueryRow(`SELECT id,kind FROM target WHERE name=?`, in.Target).Scan(&tid, &kind) != nil {
 		problem(w, 400, "unknown_target", "no such target")
 		return
 	}
-	switch {
-	case managedBy == "argo": // DOM-005
-		s.auditNS(r, p, n.Slug, "stack.create", "stack", in.Slug, "failed", map[string]any{"reason": "argo_managed"})
-		problem(w, 409, "argo_managed", "asset is managed by Argo CD; it has no stacks")
-		return
-	case in.Runtime != "" && in.Runtime != kind: // K8S-004
+	if in.Runtime != "" && in.Runtime != kind && a.ManagedBy == "control8" { // K8S-004
 		problem(w, 400, "runtime_target_mismatch", "runtime must equal the target kind ("+kind+")")
 		return
 	}
-	id, now := auth.NewID("stk"), store.Ts(s.now())
-	if _, err := s.db.Exec(`INSERT INTO stack(id,namespace_id,asset_id,target_id,slug,runtime,k8s_namespace,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-		id, n.ID, assetID, tid, in.Slug, kind, n.Slug, now, now); err != nil {
-		s.auditNS(r, p, n.Slug, "stack.create", "stack", in.Slug, "failed", nil)
-		problem(w, 409, "stack_exists", "stack already exists")
+	if !s.productAllowed(w, r, p, n.ID, n.Slug, a.Product, "stack.create") {
 		return
 	}
-	s.auditNS(r, p, n.Slug, "stack.create", "stack", id, "success", map[string]any{"slug": in.Slug, "asset": in.Asset, "target": in.Target})
-	x, _ := scanStack(s.db.QueryRow(stackSel+`WHERE st.id=?`, id))
-	s.publishStack(x)
-	writeJSON(w, 201, x.JSON())
+	s.insertStack(w, r, p, n.ID, n.Slug, a, tid, in.Slug, nil)
 }
 
 // deleteStack deletes a draft; any other state requests a teardown deployment (08 Teardown).
@@ -223,7 +270,7 @@ func (s *server) deleteStack(w http.ResponseWriter, r *http.Request, p *auth.Pri
 	}
 	s.db.Exec(`UPDATE stack SET state='removed',updated_at=? WHERE id=?`, store.Ts(s.now()), x.ID)
 	s.auditNS(r, p, x.NS, "stack.delete", "stack", x.ID, "success", nil)
-	s.publish(events.Event{Type: "stack.removed", At: s.now(), Namespace: x.NS, Data: map[string]string{"namespace": x.NS, "slug": x.Slug}})
+	s.publish(events.Event{Type: "stack.removed", At: s.now(), Namespace: x.NS, Product: x.ProdID, Data: map[string]string{"namespace": x.NS, "slug": x.Slug}})
 	w.WriteHeader(204)
 }
 
@@ -366,7 +413,7 @@ func (s *server) createRevision(w http.ResponseWriter, r *http.Request, p *auth.
 	full, _ := scanRev(s.db.QueryRow(`SELECT `+revCols+` FROM revision WHERE id=?`, id), x.Runtime, true)
 	ev := full
 	ev.Rendered = nil
-	s.publish(events.Event{Type: "revision.created", At: s.now(), Namespace: x.NS, Data: ev})
+	s.publish(events.Event{Type: "revision.created", At: s.now(), Namespace: x.NS, Product: x.ProdID, Data: ev})
 	writeJSON(w, 201, full)
 }
 

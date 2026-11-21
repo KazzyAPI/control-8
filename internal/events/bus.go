@@ -13,6 +13,8 @@ type Event struct {
 	Namespace string    `json:"namespace"`
 	Data      any       `json:"data"`
 	Requester string    `json:"-"` // access_grant.updated audience (user id)
+	Product   string    `json:"-"` // product id: stack/deployment/revision events also reach product role holders (PRD-011); product.* audience
+	Group     string    `json:"-"` // access_grant.updated: resolved approver group at publish time (PRD-024)
 }
 
 // Sub is one subscriber. C is closed when the bus drops it (slow consumer, EVT-001) or on Unsubscribe.

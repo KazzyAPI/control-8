@@ -2,6 +2,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"fmt"
@@ -35,6 +36,16 @@ func Migrate(db *sql.DB) error {
 		version TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')))`); err != nil {
 		return err
 	}
+	// A dedicated connection with foreign keys off lets a migration rebuild a table (SQLite 12-step ALTER);
+	// the pragma is a no-op inside a transaction, so it is set around the whole run.
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	conn.ExecContext(ctx, `PRAGMA foreign_keys=OFF`)
+	defer conn.ExecContext(ctx, `PRAGMA foreign_keys=ON`)
 	files, err := migrations.ReadDir("migrations")
 	if err != nil {
 		return err
@@ -46,14 +57,14 @@ func Migrate(db *sql.DB) error {
 	sort.Strings(names)
 	for _, n := range names {
 		var done int
-		if err := db.QueryRow(`SELECT count(*) FROM schema_migrations WHERE version=?`, n).Scan(&done); err != nil {
+		if err := conn.QueryRowContext(ctx, `SELECT count(*) FROM schema_migrations WHERE version=?`, n).Scan(&done); err != nil {
 			return err
 		}
 		if done > 0 {
 			continue
 		}
 		b, _ := migrations.ReadFile("migrations/" + n)
-		tx, err := db.Begin()
+		tx, err := conn.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}

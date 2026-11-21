@@ -25,7 +25,16 @@ type Config struct {
 	ParachuteScope, LogLevel                           string
 	EventsReplay, EventsMaxConns                       int
 	EventsHeartbeat                                    time.Duration
+	EnvironmentPresets                                 []Preset // PRD-041; offered by the wizard, never applied implicitly
 }
+
+// Preset is one default environment of C8_ENVIRONMENT_PRESETS.
+type Preset struct {
+	Name string `json:"name"`
+	Tier string `json:"tier"`
+}
+
+const defaultPresets = `[{"name":"dev","tier":"non-prod"},{"name":"uat","tier":"non-prod"},{"name":"staging","tier":"prod"},{"name":"prod","tier":"prod"}]`
 
 // Error names the offending variable; secret values are never included.
 type Error struct{ Var, Msg string }
@@ -137,6 +146,17 @@ func Load(getenv func(string) string, readFile func(string) ([]byte, error)) (*C
 	if c.WebhookURL != "" {
 		if u, e := url.Parse(c.WebhookURL); e != nil || u.Host == "" {
 			fail("C8_WEBHOOK_URL", "invalid URL")
+		}
+	}
+	if e := json.Unmarshal([]byte(str("C8_ENVIRONMENT_PRESETS")), &c.EnvironmentPresets); e != nil && str("C8_ENVIRONMENT_PRESETS") != "" {
+		fail("C8_ENVIRONMENT_PRESETS", "must be a JSON list of {name, tier}")
+	}
+	if str("C8_ENVIRONMENT_PRESETS") == "" {
+		json.Unmarshal([]byte(defaultPresets), &c.EnvironmentPresets)
+	}
+	for _, p := range c.EnvironmentPresets {
+		if p.Name == "" || p.Tier != "prod" && p.Tier != "non-prod" {
+			fail("C8_ENVIRONMENT_PRESETS", "every preset needs a name and tier prod|non-prod")
 		}
 	}
 	switch c.LogLevel {
