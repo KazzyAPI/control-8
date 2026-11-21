@@ -1,43 +1,45 @@
-:root { --bg:#fff; --fg:#1a1a1a; --muted:#595959; --line:#d0d0d0; --blue:#1d4ed8; --amber:#f59e0b; --amber-bg:#fef3c7; --red:#b91c1c; --green:#15803d; --teal:#0f766e }
-@media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#eee; --muted:#aaa; --line:#444; --blue:#3b5fd6; --amber-bg:#4a3a0a; --red:#dc2626; --green:#4ade80 } }
-body { margin:0; font:16px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg) }
-a { color:inherit }
-header { display:flex; gap:1rem; align-items:center; padding:.5rem 1rem; border-bottom:1px solid var(--line) }
-header .who { margin-left:auto }
-main { padding:1rem; overflow-x:auto }
-:focus-visible { outline:3px solid var(--blue); outline-offset:2px }
-.skip { position:absolute; left:-999px } .skip:focus { left:0 }
-.badge { display:inline-block; padding:0 .5rem; border-radius:.25rem; font-weight:600 }
-.badge.managed { background:var(--blue); color:#fff }
-.badge.asis { background:var(--amber); color:#000; border:2px dashed #000 }
-.badge.parachute { background:var(--teal); color:#fff }
-.badge.none { border:1px solid var(--line); color:var(--muted) }
-.badge.tier.prod { background:var(--red); color:#fff }
-.badge.tier.nonprod { border:1px solid var(--muted); color:var(--muted) }
-.badge.large { font-size:1.25rem; padding:.25rem .75rem }
-.conn.live { color:var(--green) } .conn.reconnecting { color:#b45309 } .conn.offline { color:var(--red) }
-.stale { padding:.5rem 1rem; background:var(--amber-bg); border-bottom:2px solid var(--amber) }
-.stale.red { background:var(--red); color:#fff; border-color:var(--red) } .stale button { margin-left:1rem }
-.banner-red { background:var(--red); color:#fff; padding:.25rem 1rem }
-.modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.5); display:grid; place-items:center }
-.modal { background:var(--bg); padding:1.5rem; border-radius:.5rem }
-@media (prefers-reduced-motion: no-preference) { .flash { animation:flash 1s } @keyframes flash { from { background:var(--amber-bg) } } }
-header nav { display:flex; gap:1rem; flex-wrap:wrap }
-.scroll { overflow-x:auto } pre.scroll { padding:.5rem; border:1px solid var(--line) }
-table { border-collapse:collapse; width:100% } th, td { text-align:left; padding:.25rem .5rem; border-bottom:1px solid var(--line) }
-.cards { display:flex; gap:1rem; flex-wrap:wrap; list-style:none; padding:0 } .cards li { border:1px solid var(--line); padding:.5rem 1rem; border-radius:.25rem }
-.warn { background:var(--amber-bg); padding:.25rem .5rem; border-left:4px solid var(--amber) }
-.filters { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem }
-.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap }
-.toasts { position:fixed; right:1rem; bottom:1rem; display:grid; gap:.5rem; max-width:min(28rem, calc(100vw - 2rem)); z-index:20 }
-.toast { margin:0; padding:.5rem 1rem; border-radius:.25rem; background:var(--fg); color:var(--bg); border-left:6px solid var(--green) }
-.toast.error { border-left-color:var(--red) }
-.dlg { max-width:min(36rem, calc(100vw - 2rem)); background:var(--bg); color:var(--fg); border:1px solid var(--fg); border-radius:.5rem; padding:1rem 1.5rem }
-.dlg::backdrop { background:rgba(0,0,0,.5) }
-.stackform label { display:block; margin:.5rem 0 } .stackform input:not([type=checkbox]), .stackform select, .stackform textarea { display:block; max-width:100%; box-sizing:border-box }
-.stackform textarea { width:100%; font-family:ui-monospace, monospace }
-.dlg label { display:block; margin:.5rem 0 } .dlg input:not([type=checkbox]):not([type=radio]) { display:block; width:100%; box-sizing:border-box }
-.field-err, .red-line { color:var(--red); font-weight:600 }
-input.narrow { width:5rem }
-a.button { display:inline-block; padding:.1rem .6rem; border:1px solid var(--fg); border-radius:.25rem; text-decoration:none }
-button:disabled { opacity:.6; cursor:not-allowed }
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+}
+/* Darker status hues so coloured text passes axe contrast (4.5:1) on the light page. */
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  --color-error: oklch(50% 0.21 27);
+  --color-error-content: oklch(98% 0 0);
+  --color-success: oklch(45% 0.13 150);
+  --color-success-content: oklch(98% 0 0);
+  --color-info: oklch(45% 0.15 240);
+  --color-info-content: oklch(98% 0 0);
+}
+.skip { position:absolute; left:-999px; z-index:50 } .skip:focus { left:0 }
+:focus-visible { outline:3px solid var(--color-primary); outline-offset:2px }
+@media (prefers-reduced-motion: no-preference) { .flash { animation:flash 1s } @keyframes flash { from { background:var(--color-warning) } } }
+
+/* Tailwind's preflight strips element defaults; restore a readable baseline and give plain form elements daisyUI components. */
+@layer base {
+  h1 { @apply text-2xl font-bold mb-4 }
+  h2 { @apply text-xl font-semibold mt-6 mb-2 }
+  h3 { @apply text-lg font-semibold mt-4 mb-2 }
+  main p, main ul, main ol, main form { @apply my-2 }
+  main ul:not(.menu, .steps, .menu *), main ol { padding-inline-start: 1.5rem }
+  main ul:not(.menu, .steps, .menu *) { list-style: disc }
+  main ol { list-style: decimal }
+  main a:not(.btn, .menu *) { @apply link link-primary }
+  code, pre { @apply font-mono }
+  pre { @apply p-2 text-sm }
+}
+@layer components {
+  :is(main, dialog) :is(input:not([type=checkbox], [type=radio], [type=hidden]), select, textarea) { @apply w-full max-w-xl }
+  :is(main, dialog) input:not([type=checkbox], [type=radio], [type=hidden]) { @apply input }
+  :is(main, dialog) select { @apply select }
+  :is(main, dialog) textarea { @apply textarea font-mono }
+  :is(main, dialog) input[type=checkbox] { @apply checkbox checkbox-sm }
+  :is(main, dialog) input[type=radio] { @apply radio radio-sm }
+  :is(main, dialog) button { @apply btn btn-sm }
+  :is(main, dialog) button[type=submit] { @apply btn-primary }
+  :is(main, dialog) fieldset { @apply border border-base-300 rounded-box p-3 my-2 }
+  :is(.stackform, .filters, dialog form) label { @apply flex flex-col gap-1 my-2 }
+  :is(.stackform, .filters, dialog form) label:has(> input:is([type=checkbox], [type=radio])) { @apply flex-row items-center gap-2 }
+}

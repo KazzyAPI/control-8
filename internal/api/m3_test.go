@@ -106,7 +106,7 @@ func TestM3_OIDCLoginGroupsTokens(t *testing.T) { // AUTH-001..006, AUTH-003, AU
 	if rec = login("nobody"); rec.Header().Get("Location") != "/no-access" {
 		t.Fatalf("no-access redirect = %s", rec.Header().Get("Location"))
 	}
-	if e.do("GET", "/no-access", "", nil).Code != 200 || e.do("GET", "/login", "", nil).Code != 200 {
+	if e.do("GET", "/no-access", "", nil).Code != 200 {
 		t.Fatal("pages")
 	}
 

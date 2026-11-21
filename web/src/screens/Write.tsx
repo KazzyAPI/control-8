@@ -151,7 +151,7 @@ export function DeployDialog({ s, r, onClose }: { s: S['Stack']; r: S['Revision'
     <Dialog title={`Deploy revision ${r.number}`} onClose={onClose}>
       <form onSubmit={form.onSubmit} noValidate>
         <p><TierBadge tier={s.environment_tier} /> <ProfileBadge profile={r.safety_profile} large /></p>
-        {changed && <p className="red-line">Safety profile changes: {profileName(s.safety_profile)} {'→'} {profileName(r.safety_profile)}</p>}
+        {changed && <p className="text-error font-semibold">Safety profile changes: {profileName(s.safety_profile)} {'→'} {profileName(r.safety_profile)}</p>}
         <fieldset><legend>Safety profile of this revision</legend>
           {(['managed_rollout', 'as_is'] as const).map((p) => <label key={p}><input type="radio" name="profile" checked={f.picked === p} onChange={() => setF({ ...f, picked: p })} /> {profileName(p)}</label>)}
         </fieldset>
@@ -203,7 +203,7 @@ export function StackActions({ s }: { s: S['Stack'] }) {
   return (
     <section aria-labelledby="h-act">
       <h2 id="h-act">Actions</h2>
-      <p><Link className="button" to={`/n/${s.namespace}/s/${s.slug}/revisions/new`}>New revision</Link>{' '}
+      <p><Link className="btn btn-sm btn-primary" to={`/n/${s.namespace}/s/${s.slug}/revisions/new`}>New revision</Link>{' '}
         <button disabled={!draft && !a.allowed} onClick={() => setDlg('teardown')}>{draft ? 'Delete draft' : 'Teardown'}</button>
         </p>
       {rows.length > 0 && <ul>{rows.map((r) => <li key={`${r.workload}/${r.container}`}>{r.workload} / {r.container}: {r.image}{' '}

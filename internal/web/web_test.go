@@ -18,6 +18,7 @@ func TestHandler(t *testing.T) {
 		cache        string
 	}{
 		{"GET", "/", 200, "no-store"},                                         // UI-005
+		{"GET", "/login", 200, "no-store"},                                    // SPA sign-in route (D-103)
 		{"GET", "/n/shop/s/web", 200, "no-store"},                             // deep link falls back
 		{"GET", "/assets/a-1.js", 200, "public, max-age=31536000, immutable"}, // hashed asset
 		{"GET", "/api/v1/nope", 404, ""},                                      // never shadowed

@@ -31,8 +31,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ toast, say }}>
       {children}
-      <div className="toasts">
-        {toasts.map((t) => <p key={t.id} className={`toast ${t.kind}`} role={t.kind === 'error' ? 'alert' : 'status'}>{t.text}</p>)}
+      <div className="toast toast-end z-50">
+        {toasts.map((t) => <p key={t.id} className={`alert ${t.kind === 'error' ? 'alert-error' : 'alert-success'}`} role={t.kind === 'error' ? 'alert' : 'status'}>{t.text}</p>)}
       </div>
       <div className="sr-only" role="status" aria-live="polite">{said}</div>
     </Ctx.Provider>
@@ -69,14 +69,16 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
     return () => { if (typeof d.close === 'function') d.close() }
   }, [])
   return (
-    <dialog ref={ref} className="dlg" aria-labelledby="dlg-title" onCancel={(e) => { e.preventDefault(); onClose() }}>
-      <h2 id="dlg-title">{title}</h2>
-      {children}
+    <dialog ref={ref} className="modal" aria-labelledby="dlg-title" onCancel={(e) => { e.preventDefault(); onClose() }}>
+      <div className="modal-box">
+        <h2 id="dlg-title" className="text-lg font-bold">{title}</h2>
+        {children}
+      </div>
     </dialog>
   )
 }
 
-export const FormError = ({ msg }: { msg: string | null }) => (msg ? <p className="field-err" role="alert">{msg}</p> : null)
+export const FormError = ({ msg }: { msg: string | null }) => (msg ? <p className="text-error font-semibold" role="alert">{msg}</p> : null)
 
 // Reason (+ optional typed confirmation) dialog used by revoke, reject, teardown.
 export function ReasonDialog({ title, submit, typed, onClose, onSubmit, children }: {
@@ -97,7 +99,7 @@ export function ReasonDialog({ title, submit, typed, onClose, onSubmit, children
         <label>Reason <input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></label>
         {typed && <label>Type <code>{typed}</code> to confirm <input value={t} onChange={(e) => setT(e.target.value)} autoComplete="off" /></label>}
         <FormError msg={shown ? err : null} />
-        <p><button type="submit">{submit}</button> <button type="button" onClick={onClose}>Cancel</button></p>
+        <p className="modal-action"><button type="submit">{submit}</button> <button type="button" onClick={onClose}>Cancel</button></p>
       </form>
     </Dialog>
   )

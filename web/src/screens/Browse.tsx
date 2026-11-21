@@ -30,11 +30,13 @@ export function Overview() {
     <>
       <h1>Overview</h1>
       <section aria-labelledby="h-targets"><h2 id="h-targets">Targets</h2>
-        <Q q={targets}>{(d) => <ul className="cards">{d.items.map((t) =>
-          <li key={t.name}><strong>{t.name}</strong> <TierBadge tier={t.environment_tier} /><br />{t.reachable ? 'Reachable' : 'Unreachable'} {'·'} {t.sync ?? 'unknown'} {'·'} last seen {hhmm(t.last_seen_at)}</li>)}</ul>}</Q>
+        <Q q={targets}>{(d) => <ul className="flex flex-wrap gap-4 !list-none !p-0">{d.items.map((t) =>
+          <li key={t.name} className="card card-border bg-base-100"><div className="card-body p-4"><strong className="card-title">{t.name} <TierBadge tier={t.environment_tier} /></strong>
+            <span>{t.reachable ? 'Reachable' : 'Unreachable'} {'·'} {t.sync ?? 'unknown'} {'·'} last seen {hhmm(t.last_seen_at)}</span></div></li>)}</ul>}</Q>
       </section>
       <section aria-labelledby="h-pending"><h2 id="h-pending">Pending approvals</h2>
-        <p>{pending} access request{pending === 1 ? '' : 's'} waiting {pending > 0 && <Link to="/access/approvals">Open queue</Link>}</p></section>
+        <div className="stats stats-vertical sm:stats-horizontal border border-base-300"><div className="stat"><div className="stat-value">{pending}</div>
+          <div className="stat-desc text-base-content">{pending} access request{pending === 1 ? '' : 's'} waiting {pending > 0 && <Link to="/access/approvals">Open queue</Link>}</div></div></div></section>
       <section aria-labelledby="h-mine"><h2 id="h-mine">My active grants</h2><GrantList grants={me.active_grants ?? []} empty="No active prod access." /></section>
       <Q q={inv}>{() => <>{[...groups].map(([ns, stacks]) =>
         <section key={ns} aria-labelledby={`h-${ns}`}><h2 id={`h-${ns}`}><Link to={`/n/${ns}`}>{ns}</Link></h2>

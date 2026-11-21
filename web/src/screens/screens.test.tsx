@@ -51,7 +51,7 @@ it('deployment page shows progress then result live', async () => {
   expect(screen.getByText('running')).toBeTruthy()
   expect(screen.getByText(/grant bypassed/)).toBeTruthy() // UI-018
   await act(async () => applyEvent(qc, { type: 'deployment.updated', at: '', namespace: 'shop', data: { ...dep, status: 'succeeded', rollout: { ...dep.rollout, state: 'done', result: 'healthy' } } }))
-  expect(await screen.findByText('succeeded', { selector: 'strong' })).toBeTruthy()
+  expect(await screen.findByText('succeeded', { selector: '.badge' })).toBeTruthy()
   expect(screen.getByText('Rollout result: healthy')).toBeTruthy()
 })
 

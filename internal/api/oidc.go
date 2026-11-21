@@ -171,7 +171,7 @@ func (s *server) approverFor(groups []string) []string {
 	return out
 }
 
-// htmlPage serves the minimal /login and /no-access pages until the SPA lands (M13).
+// htmlPage serves the minimal /no-access page (/login is an SPA route).
 func htmlPage(title, body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

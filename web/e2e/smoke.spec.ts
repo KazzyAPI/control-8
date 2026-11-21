@@ -38,3 +38,16 @@ test('axe finds no serious violations on the shell (UI-033)', async ({ page }) =
   const { violations } = await new AxeBuilder({ page }).analyze()
   expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([])
 })
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`sign-in page renders and passes axe in ${colorScheme} theme (UI-033)`, async ({ browser, baseURL }) => {
+    const c = await browser.newContext({ baseURL, colorScheme })
+    const page = await c.newPage()
+    await page.goto('/login')
+    await expect(page.getByRole('link', { name: 'Sign in with OIDC' })).toHaveAttribute('href', '/auth/login')
+    await expect(page.getByLabel('Break-glass password')).toBeVisible()
+    const { violations } = await new AxeBuilder({ page }).analyze()
+    expect(violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')).toEqual([])
+    await c.close()
+  })
+}

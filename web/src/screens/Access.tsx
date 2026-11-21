@@ -38,11 +38,11 @@ function QueueRow({ g, canDecide }: { g: S['AccessGrant']; canDecide: boolean })
   return (
     <tr>
       <th scope="row">{g.namespace}</th><td>{g.target}</td><td>{g.requester}</td><td>{g.reason}{g.ticket_ref && <> ({g.ticket_ref})</>}</td><td>{g.duration_minutes} min</td>
-      <td>{canDecide ? <>
-        <label>Minutes <input className="narrow" aria-label={`Minutes for ${g.id}`} value={mins} onChange={(e) => setMins(e.target.value)} /></label>{' '}
+      <td>{canDecide ? <div className="flex flex-wrap items-end gap-2">
+        <label>Minutes <input className="w-20" aria-label={`Minutes for ${g.id}`} value={mins} onChange={(e) => setMins(e.target.value)} /></label>{' '}
         <label>Note <input aria-label={`Note for ${g.id}`} value={note} onChange={(e) => setNote(e.target.value)} /></label>{' '}
         <button onClick={approve} aria-label={`Approve ${g.id}`}>Approve</button> <button onClick={deny} aria-label={`Deny ${g.id}`}>Deny</button>
-        <FormError msg={shown} /></> : 'Your own request'}</td>
+        <FormError msg={shown} /></div> : 'Your own request'}</td>
     </tr>
   )
 }
@@ -55,7 +55,7 @@ export function ApproverQueue() {
   return (
     <>
       <h1>Approver queue</h1>
-      {me.auth_method === 'break_glass' && <p>Break-glass sessions cannot approve grants.</p>}
+      {me.auth_method === 'break_glass' && <p className="alert alert-info">Break-glass sessions cannot approve grants.</p>}
       <Q q={q}>{(d) => {
         const rows = d.items.filter((g) => g.status === 'requested' && (me.global_admin || me.approver_for?.includes(g.namespace ?? '')))
         return rows.length ? <Table label="Access requests" head={['Namespace', 'Target', 'Requester', 'Reason', 'Requested', 'Decision']}>
@@ -97,7 +97,7 @@ export function DeploymentActions({ d }: { d: S['Deployment'] }) {
   const [rejecting, setRejecting] = useState(false)
   const p = { params: { path: { id: d.id } } }
   if (d.status !== 'pending_approval' && d.status !== 'queued') return null
-  return <p>
+  return <p className="flex flex-wrap gap-2 my-2">
     {d.status === 'pending_approval' && <><button onClick={() => act(() => send('POST', '/deployments/{id}/approve', p), 'Deployment approved')}>Approve</button>{' '}
       <button onClick={() => setRejecting(true)}>Reject</button>{' '}</>}
     <button onClick={() => act(() => send('POST', '/deployments/{id}/cancel', p), 'Deployment cancelled')}>Cancel deployment</button>
